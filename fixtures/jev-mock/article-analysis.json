@@ -1,0 +1,109 @@
+{
+  "model": "jev-latest",
+  "answers": {
+    "article_kind": {
+      "type": "choice",
+      "choice": "analysis",
+      "probabilities": {
+        "breaking": 0.04,
+        "analysis": 0.78,
+        "opinion": 0.08,
+        "profile": 0.03,
+        "explainer": 0.04,
+        "press_release": 0.01,
+        "other": 0.02
+      },
+      "confidence": 0.74
+    },
+    "primary_topic": {
+      "type": "choice",
+      "choice": "elections",
+      "probabilities": {
+        "politics": 0.22,
+        "elections": 0.61,
+        "economy": 0.04,
+        "business": 0.02,
+        "tech": 0.02,
+        "science": 0.01,
+        "health": 0.01,
+        "climate": 0.01,
+        "war_conflict": 0.02,
+        "crime_law": 0.01,
+        "culture": 0.01,
+        "sports": 0.01,
+        "other": 0.01
+      },
+      "confidence": 0.55
+    },
+    "geo_scope": {
+      "type": "choice",
+      "choice": "national",
+      "probabilities": {
+        "local": 0.08,
+        "national": 0.71,
+        "international": 0.16,
+        "unclear": 0.05
+      },
+      "confidence": 0.64
+    },
+    "time_orientation": {
+      "type": "choice",
+      "choice": "upcoming",
+      "probabilities": {
+        "past_event": 0.12,
+        "ongoing": 0.28,
+        "upcoming": 0.54,
+        "timeless": 0.06
+      },
+      "confidence": 0.42
+    },
+    "newsworthiness": {
+      "type": "score",
+      "score": 3.4,
+      "legend": {
+        "0": "Skip",
+        "1": "Minor",
+        "2": "Notable",
+        "3": "Major",
+        "4": "Historic"
+      },
+      "probabilities": {
+        "0": 0.02,
+        "1": 0.08,
+        "2": 0.22,
+        "3": 0.48,
+        "4": 0.2
+      },
+      "confidence": 0.41
+    },
+    "source_quality": {
+      "type": "score",
+      "score": 3.1,
+      "legend": {
+        "0": "Unreliable",
+        "1": "Weak",
+        "2": "Adequate",
+        "3": "Strong",
+        "4": "Primary/official"
+      },
+      "probabilities": {
+        "0": 0.03,
+        "1": 0.07,
+        "2": 0.22,
+        "3": 0.53,
+        "4": 0.15
+      },
+      "confidence": 0.46
+    },
+    "keep_article": {
+      "type": "noul",
+      "noul": 0.88
+    }
+  },
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  },
+  "_mock": true,
+  "_note": "Canned System One shape for local work when TYPESAFE_API_KEY is unset. Not a live Jev result."
+}
