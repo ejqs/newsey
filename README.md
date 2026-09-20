@@ -26,7 +26,9 @@ Without a key, use [`fixtures/jev-mock/`](fixtures/jev-mock/) — do not call th
 
 ## Docs
 
-Index: [docs/README.md](docs/README.md).
+Index: [docs/README.md](docs/README.md). Hosting: [docs/hosting.md](docs/hosting.md).
+
+Railway project (empty service **rose**, GitHub not connected yet): [dashboard](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463).
 
 ## Refresh the skill
 

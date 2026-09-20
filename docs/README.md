@@ -4,4 +4,7 @@ Prefer this folder over chat history.
 
 | Doc | Purpose |
 | --- | --- |
-| [jev-skill.md](./jev-skill.md) | Official TypeSafe / Jev agent skill: where it is, how agents use it, API key, mock fallback |
+| [project-context.md](./project-context.md) | Goals, constraints, locked decisions, Jev skill, **GitHub + Railway URLs** |
+| [jev-ai-fanout.md](./jev-ai-fanout.md) | Pipeline, v0 schema (`news_sources` / `articles` / `jev_analyses`), pacing, robots.txt, taxonomy |
+| [jev-skill.md](./jev-skill.md) | Official TypeSafe / Jev agent skill: paths, API key, mock fallback |
+| [hosting.md](./hosting.md) | GitHub push checklist and Railway project/service links |
