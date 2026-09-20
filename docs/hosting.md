@@ -1,19 +1,16 @@
 # Hosting — GitHub + Railway
 
-**Updated:** 2026-09-20
+**Updated:** 2026-09-21
 
 This repo is skill + product docs, not a deployable web app yet.
 
 ## GitHub
 
-Earlan creates and pushes (agent GitHub token could not create repos: `403`).
+Live at **https://github.com/ejqs/newsey** (public). All branches are on GitHub.
 
-- Intended: **https://github.com/ejqs/newsey** (private)
-- Fallback names: `rose`, `newsey-rose`
-- Include Jev skill paths, `.env.example`, `fixtures/jev-mock/`, and `docs/`
-- Do **not** commit `.env`
+Local `origin` is GitHub. Two-way sync with Cursor Origin is the inbound mirror **`ejqs/newsey`** — see [github-mirror.md](./github-mirror.md).
 
-Origin source: [ejqs/newsey](https://cursor.com/codebase/ejqs/newsey) PR [#1](https://cursor.com/codebase/ejqs/newsey/pull/1) (`cursor/install-jev-skill-7ef1`). Merge that into `main` (Origin `main` is empty besides the init commit) before or as part of the GitHub push.
+Do **not** commit `.env`.
 
 ## Railway
 

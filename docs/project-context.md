@@ -2,10 +2,10 @@
 
 **Product:** **Rose** — Recursive Opinionated Search Engine  
 **Owner:** Earlan  
-**Status:** Direction confirmed; docs only (no app build yet). **TypeSafe / Jev agent skill is installed in Origin.** GitHub + Railway: project exists; GitHub repo is Earlan’s to create/push.  
-**Updated:** 2026-09-20  
-**Origin:** [ejqs/newsey](https://cursor.com/codebase/ejqs/newsey) (Jev skill on PR [#1](https://cursor.com/codebase/ejqs/newsey/pull/1), branch `cursor/install-jev-skill-7ef1`)  
-**GitHub:** not created yet — Earlan will push. Intended: `https://github.com/ejqs/newsey` (private; fallback names `rose` or `newsey-rose` if taken).
+**Status:** Direction confirmed; docs only (no app build yet). **TypeSafe / Jev agent skill is installed.** GitHub repo exists; Origin inbound-mirrors it.  
+**Updated:** 2026-09-21  
+**GitHub (source of truth):** https://github.com/ejqs/newsey  
+**Origin inbound mirror:** [ejqs/newsey](https://cursor.com/codebase/ejqs/newsey) — see [github-mirror.md](./github-mirror.md)
 
 ## One-line definition
 
@@ -56,7 +56,7 @@ Schema, statuses, and cron batching: [`jev-ai-fanout.md`](./jev-ai-fanout.md).
 
 ## Hosting (Railway)
 
-Created under Earlan’s **ejqs** workspace. Empty service — **no GitHub source connected** (repo does not exist yet). No public domain (nothing to serve).
+Created under Earlan’s **ejqs** workspace. Empty service — GitHub repo now exists but is **not yet connected** as the Railway source. No public domain (nothing to serve).
 
 | | |
 | --- | --- |
@@ -66,7 +66,7 @@ Created under Earlan’s **ejqs** workspace. Empty service — **no GitHub sourc
 | **Workspace** | ejqs (`f43c0117-46cb-439c-a5e3-0b21b8c8a0ef`) |
 | **`TYPESAFE_API_KEY`** | Variable **exists** on rose, value **empty**. Paste the real key from [console.typesafe.ai/keys](https://console.typesafe.ai/keys). Do not invent one. |
 
-**After GitHub exists:** in the rose service, connect source `ejqs/newsey` (branch `main` once Earlan pushes). Railway GitHub App must have access to that repo.
+**Next on Railway:** in the rose service, connect source `ejqs/newsey` (prefer a branch that has the app, not empty `main`). Railway GitHub App must have access to that repo.
 
 **First deploy:** this tree is skill + docs, not a web app. Wait until Rose has an HTTP service that binds `PORT`, **or** add a tiny health server before connecting source (connecting GitHub starts a build that will fail today).
 
