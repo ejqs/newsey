@@ -88,6 +88,35 @@ CREATE TABLE IF NOT EXISTS article_geo_sentiment (
 );
 CREATE INDEX IF NOT EXISTS article_geo_sentiment_country_iso
   ON article_geo_sentiment (country_iso);
+CREATE TABLE IF NOT EXISTS bot_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS host_robots (
+  host TEXT PRIMARY KEY,
+  robots_body TEXT,
+  robots_status TEXT NOT NULL,
+  checked_at TEXT NOT NULL,
+  ttl_until TEXT NOT NULL,
+  crawl_delay_seconds INTEGER,
+  sitemaps TEXT,
+  last_error TEXT
+);
+CREATE TABLE IF NOT EXISTS crawl_frontier (
+  url TEXT PRIMARY KEY,
+  host TEXT NOT NULL,
+  discovered_from TEXT,
+  depth INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL,
+  note TEXT,
+  next_eligible_at TEXT NOT NULL,
+  enqueued_at TEXT NOT NULL,
+  last_attempt_at TEXT,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS crawl_frontier_pick ON crawl_frontier (status, next_eligible_at);
+CREATE INDEX IF NOT EXISTS crawl_frontier_host ON crawl_frontier (host);
 `;
 
 function toPg(sql) {
