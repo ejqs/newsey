@@ -25,7 +25,8 @@ App map: [`web.md`](./web.md).
 | `GET /health` | 200 `{ ok, service: "rose-bot", engine: "postgres", lastTick, articles, sources, globe }` |
 | `GET /articles` | Recently stored articles (no body) |
 | `GET /globe` | Aggregated country tones for the public globe |
-| `GET /sources` | 401 unless `ROSE_SERVICE_TOKEN` matches |
+| `GET /sources` | 401 unless `ROSE_SERVICE_TOKEN` or an admin API key matches |
+| `/v1/*` | Hashed API keys from rose-web-admin. See [`bot-command-api.md`](./bot-command-api.md) |
 
 Each tick (default **15 minutes**): pick **1** eligible source (`status` in `ok`/`unknown`, `next_eligible_at`, rotate by priority / least-recent success), fetch RSS, record every item URL in `url_ledger` (never fetch a URL twice), honor `robots.txt`, fetch at most **3** new articles, wait ≥2s (or Crawl-delay) between requests, then set that source’s `next_eligible_at` **6 hours** later. `paused` is never picked.
 

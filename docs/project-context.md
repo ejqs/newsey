@@ -65,9 +65,11 @@ Schema, statuses, and cron batching: [`jev-ai-fanout.md`](./jev-ai-fanout.md). R
 
 | Path | What |
 | --- | --- |
-| `GET /health` | 200 `{ ok: true, service: "rose-bot", engine: "postgres", lastTick, articles, sources }` |
+| `GET /health` | `{ ok: true, service: "rose-bot", engine: "postgres", lastTick, articles, sources, globe }` |
 | `GET /articles` | Recently stored articles (title, url, timestamps; no full body) |
-| `GET /sources` | Token-gated (`ROSE_SERVICE_TOKEN`). Ops fields belong in rose-web-admin. |
+| `GET /globe` | Aggregated country tones for the public globe |
+| `GET /sources` | Token-gated (`ROSE_SERVICE_TOKEN` or admin API key). Ops fields belong in rose-web-admin. |
+| `/v1/*` | Command API. Keys from rose-web-admin `/keys`. [`bot-command-api.md`](./bot-command-api.md) |
 
 ### Pace
 

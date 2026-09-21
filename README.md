@@ -9,8 +9,8 @@ This repo is **rose-bot**. Globe **Jev** (country + sentiment) runs after each s
 
 ```bash
 # Requires DATABASE_URL (Postgres). No SQLite.
-npm start   # PORT (default 43123). GET /health  GET /articles  GET /globe
-npm test    # Jev globe gates + color aggregation
+npm start   # PORT (default 43123). GET /health  GET /articles  GET /globe  /v1/* (API keys)
+npm test    # Jev globe gates + api-keys token/hash checks
 ```
 
 Requires **Node 22+**.
@@ -39,7 +39,7 @@ Country + sentiment pipeline: [docs/globe-country-sentiment.md](docs/globe-count
 
 ## Docs
 
-Index: [docs/README.md](docs/README.md). App split: [docs/web.md](docs/web.md). Hosting: [docs/hosting.md](docs/hosting.md). Product: [docs/project-context.md](docs/project-context.md).
+Index: [docs/README.md](docs/README.md). App split: [docs/web.md](docs/web.md). Hosting: [docs/hosting.md](docs/hosting.md). Product: [docs/project-context.md](docs/project-context.md). Command API: [docs/bot-command-api.md](docs/bot-command-api.md).
 
 GitHub: [ejqs/newsey](https://github.com/ejqs/newsey). Live bot: [rose-production-ac15.up.railway.app](https://rose-production-ac15.up.railway.app). Railway **rose**: [dashboard](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463).
 

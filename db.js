@@ -1,4 +1,19 @@
+import { API_KEYS_SCHEMA } from "./api-keys.js";
+
 const DATABASE_URL = process.env.DATABASE_URL || "";
+
+function poolSsl(connectionString) {
+  try {
+    const mode = new URL(connectionString).searchParams.get("sslmode");
+    if (mode === "disable") return false;
+  } catch {
+    /* ignore */
+  }
+  const local =
+    /localhost|127\.0\.0\.1/i.test(connectionString) || process.env.DATABASE_SSL === "0";
+  if (local) return false;
+  return { rejectUnauthorized: false };
+}
 
 const PG_SCHEMA = `
 CREATE TABLE IF NOT EXISTS news_sources (
@@ -89,14 +104,13 @@ export async function openDb() {
     throw new Error("DATABASE_URL is required (Postgres only). Set it and retry.");
   }
   const pg = await import("pg");
-  const local =
-    /localhost|127\.0\.0\.1/i.test(DATABASE_URL) || process.env.DATABASE_SSL === "0";
   const pool = new pg.default.Pool({
     connectionString: DATABASE_URL,
     max: 3,
-    ssl: local ? false : { rejectUnauthorized: false },
+    ssl: poolSsl(DATABASE_URL),
   });
   await pool.query(PG_SCHEMA);
+  await pool.query(API_KEYS_SCHEMA);
   return {
     kind: "postgres",
     label: "postgres (DATABASE_URL)",
