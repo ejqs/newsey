@@ -125,7 +125,7 @@ test("aggregate: green/red/blue and strength from agreeing articles", () => {
   assert.ok(!byIso.FR);
   assert.ok(byIso.UA.strength > byIso.JP.strength);
   assert.ok(byIso.UA.net < -NET_TONE_THRESHOLD);
-  assert.match(capColor("positive", 1), /^rgba\(22, 145, 72,/);
-  assert.match(capColor("negative", 1), /^rgba\(186, 36, 36,/);
-  assert.match(capColor("neutral", 1), /^rgba\(36, 96, 186,/);
+  assert.match(capColor("positive", 1), /^rgba\(46, 196, 92,/);
+  assert.match(capColor("negative", 1), /^rgba\(220, 50, 50,/);
+  assert.match(capColor("neutral", 1), /^rgba\(56, 120, 220,/);
 });

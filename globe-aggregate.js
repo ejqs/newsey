@@ -48,8 +48,8 @@ export function aggregateCountryTones(rows) {
 }
 
 export function capColor(tone, strength) {
-  const a = 0.28 + 0.62 * (Number(strength) || 0);
-  if (tone === "positive") return `rgba(22, 145, 72, ${a})`;
-  if (tone === "negative") return `rgba(186, 36, 36, ${a})`;
-  return `rgba(36, 96, 186, ${a})`;
+  const a = 0.55 + 0.4 * (Number(strength) || 0);
+  if (tone === "positive") return `rgba(46, 196, 92, ${a})`;
+  if (tone === "negative") return `rgba(220, 50, 50, ${a})`;
+  return `rgba(56, 120, 220, ${a})`;
 }

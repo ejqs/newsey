@@ -48,7 +48,7 @@ Per country, over eligible rows:
 - **Green** if `net > 0.35`
 - **Red** if `net < -0.35`
 - **Blue** otherwise (mixed, weak, or not enough signal)
-- **Strength** (opacity / polygon height) = `(article_count / max_count) * (0.35 + 0.65 * mean_confidence)`, clamped 0.22–1
+- **Strength** (opacity / polygon height) = `(article_count / max_count) * (0.35 + 0.65 * mean_confidence)`, clamped 0.22–1. Globe fill α is `0.55 + 0.4 * strength` in `rgba(46,196,92)` / `rgba(220,50,50)` / `rgba(56,120,220)`.
 
 ## Tables (bot-owned)
 
