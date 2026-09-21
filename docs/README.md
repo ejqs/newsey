@@ -6,6 +6,7 @@ Prefer this folder over chat history.
 | --- | --- |
 | [project-context.md](./project-context.md) | Goals, constraints, locked decisions, Jev skill, **GitHub + Railway URLs** |
 | [web.md](./web.md) | Three apps: rose-bot, rose-web-public, rose-web-admin. Postgres only. No rose-service |
+| [bot-command-api.md](./bot-command-api.md) | API keys from admin; `GET/POST /v1/*` to command the bot |
 | [jev-ai-fanout.md](./jev-ai-fanout.md) | Pipeline, v0 schema (`news_sources` / `articles` / `url_ledger` / `jev_analyses`), pacing, robots.txt, taxonomy |
 | [globe-country-sentiment.md](./globe-country-sentiment.md) | Additive Jev pass: primary country + good/bad/mixed; public globe colors |
 | [hosting.md](./hosting.md) | rose-bot on Railway, Postgres, GitHub + dashboard links |

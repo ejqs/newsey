@@ -2,6 +2,15 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { openDb } from "./db.js";
 import { jevGlobeTick, listGlobeCountries } from "./jev-globe.js";
+import {
+  bearerFromRequest,
+  hashToken,
+  hashesEqual,
+  hasScope,
+  parseToken,
+  SCOPE_COMMAND,
+  SCOPE_READ,
+} from "./api-keys.js";
 
 const PORT = Number(process.env.PORT) || 43123;
 const UA = "RoseBot/0.1 (+https://github.com/ejqs/newsey)";
@@ -414,13 +423,243 @@ function json(res, status, body) {
   res.end(payload);
 }
 
-async function handle(req, res) {
-  const url = new URL(req.url || "/", `http://${req.headers.host}`);
-  if (req.method !== "GET") {
-    json(res, 405, { ok: false, error: "method_not_allowed" });
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > 1_000_000) {
+        reject(new Error("too_large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
+async function readJson(req) {
+  const raw = await readBody(req);
+  if (!raw.trim()) return {};
+  return JSON.parse(raw);
+}
+
+function publicKey(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    prefix: row.prefix,
+    scopes: row.scopes,
+  };
+}
+
+async function authorizeApiKey(req, neededScope) {
+  const given = bearerFromRequest(req);
+  const parsed = parseToken(given);
+  if (!parsed) return { error: "unauthorized", status: 401 };
+  const row = await db.get("SELECT * FROM api_keys WHERE id = ?", parsed.id);
+  if (!row || row.revoked_at) return { error: "unauthorized", status: 401 };
+  if (!hashesEqual(row.secret_hash, hashToken(given))) {
+    return { error: "unauthorized", status: 401 };
+  }
+  if (neededScope && !hasScope(row.scopes, neededScope)) {
+    return { error: "forbidden", status: 403, key: row };
+  }
+  await db.run("UPDATE api_keys SET last_used_at=? WHERE id=?", nowIso(), row.id);
+  return { key: row };
+}
+
+async function requireApiKey(req, res, neededScope) {
+  const result = await authorizeApiKey(req, neededScope);
+  if (result.error) {
+    json(res, result.status, { ok: false, error: result.error });
+    return null;
+  }
+  return result.key;
+}
+
+const SOURCE_STATUSES = new Set(["ok", "paused", "unknown"]);
+
+function sourceWriteFields(body) {
+  const patch = {};
+  if (body.name != null) {
+    const name = String(body.name).trim();
+    if (!name) return { error: "name is required" };
+    patch.name = name;
+  }
+  if (body.base_url != null) {
+    const baseUrl = String(body.base_url).trim();
+    if (!baseUrl) return { error: "base_url is required" };
+    patch.base_url = baseUrl;
+  }
+  if (body.feed_url != null) {
+    const feedUrl = String(body.feed_url).trim();
+    if (!feedUrl) return { error: "feed_url is required" };
+    patch.feed_url = feedUrl;
+  }
+  if (body.scrape_method != null) {
+    patch.scrape_method = String(body.scrape_method).trim() || "rss";
+  }
+  if (body.priority != null) {
+    const priority = Number(body.priority);
+    if (!Number.isFinite(priority)) return { error: "priority must be a number" };
+    patch.priority = priority;
+  }
+  if (body.status != null) {
+    const status = String(body.status).trim();
+    if (!SOURCE_STATUSES.has(status)) return { error: "status must be ok, paused, or unknown" };
+    patch.status = status;
+  }
+  return { patch };
+}
+
+async function listSources() {
+  return db.all("SELECT * FROM news_sources ORDER BY priority DESC");
+}
+
+async function handleV1(req, res, url) {
+  const path = url.pathname;
+
+  if (req.method === "GET" && path === "/v1/status") {
+    const key = await requireApiKey(req, res, SCOPE_READ);
+    if (!key) return;
+    json(res, 200, {
+      ok: true,
+      service: "rose-bot",
+      product: "rose",
+      engine: "postgres",
+      key: publicKey(key),
+      lastTick,
+      ticking,
+      articles: countN(await db.get("SELECT COUNT(*) AS n FROM articles")),
+      sources: countN(await db.get("SELECT COUNT(*) AS n FROM news_sources")),
+    });
     return;
   }
+
+  if (req.method === "GET" && path === "/v1/sources") {
+    const key = await requireApiKey(req, res, SCOPE_READ);
+    if (!key) return;
+    json(res, 200, { ok: true, sources: await listSources() });
+    return;
+  }
+
+  if (req.method === "POST" && path === "/v1/tick") {
+    const key = await requireApiKey(req, res, SCOPE_COMMAND);
+    if (!key) return;
+    try {
+      await readJson(req);
+    } catch {
+      json(res, 400, { ok: false, error: "invalid_json" });
+      return;
+    }
+    if (ticking) {
+      json(res, 409, { ok: false, error: "tick_in_progress", lastTick });
+      return;
+    }
+    const tick = await runTick();
+    json(res, 200, { ok: true, action: "tick", tick });
+    return;
+  }
+
+  if (req.method === "POST" && path === "/v1/sources") {
+    const key = await requireApiKey(req, res, SCOPE_COMMAND);
+    if (!key) return;
+    let body;
+    try {
+      body = await readJson(req);
+    } catch {
+      json(res, 400, { ok: false, error: "invalid_json" });
+      return;
+    }
+    const parsed = sourceWriteFields(body);
+    if (parsed.error) {
+      json(res, 400, { ok: false, error: parsed.error });
+      return;
+    }
+    const name = parsed.patch.name;
+    const baseUrl = parsed.patch.base_url;
+    const feedUrl = parsed.patch.feed_url;
+    if (!name || !baseUrl || !feedUrl) {
+      json(res, 400, { ok: false, error: "name, base_url, and feed_url are required" });
+      return;
+    }
+    const t = nowIso();
+    const row = await db.get(
+      `INSERT INTO news_sources (
+        name, base_url, feed_url, scrape_method, status, priority,
+        next_eligible_at, articles_scraped_count, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      RETURNING *`,
+      name,
+      baseUrl,
+      feedUrl,
+      parsed.patch.scrape_method || "rss",
+      parsed.patch.status || "unknown",
+      parsed.patch.priority ?? 0,
+      t,
+      t,
+      t,
+    );
+    json(res, 201, { ok: true, action: "create_source", source: row });
+    return;
+  }
+
+  const sourceMatch = path.match(/^\/v1\/sources\/(\d+)$/);
+  if (req.method === "POST" && sourceMatch) {
+    const key = await requireApiKey(req, res, SCOPE_COMMAND);
+    if (!key) return;
+    const id = Number(sourceMatch[1]);
+    let body;
+    try {
+      body = await readJson(req);
+    } catch {
+      json(res, 400, { ok: false, error: "invalid_json" });
+      return;
+    }
+    const parsed = sourceWriteFields(body);
+    if (parsed.error) {
+      json(res, 400, { ok: false, error: parsed.error });
+      return;
+    }
+    const patch = parsed.patch;
+    if (!Object.keys(patch).length) {
+      json(res, 400, { ok: false, error: "no_fields" });
+      return;
+    }
+    const existing = await db.get("SELECT * FROM news_sources WHERE id=?", id);
+    if (!existing) {
+      json(res, 404, { ok: false, error: "not_found" });
+      return;
+    }
+    patch.updated_at = nowIso();
+    const keys = Object.keys(patch);
+    await db.run(
+      `UPDATE news_sources SET ${keys.map((k) => `${k}=?`).join(", ")} WHERE id=?`,
+      ...keys.map((k) => patch[k]),
+      id,
+    );
+    json(res, 200, {
+      ok: true,
+      action: "update_source",
+      source: await db.get("SELECT * FROM news_sources WHERE id=?", id),
+    });
+    return;
+  }
+
+  json(res, 404, { ok: false, error: "not_found" });
+}
+
+async function handle(req, res) {
+  const url = new URL(req.url || "/", `http://${req.headers.host}`);
   if (url.pathname === "/health" || url.pathname === "/") {
+    if (req.method !== "GET") {
+      json(res, 405, { ok: false, error: "method_not_allowed" });
+      return;
+    }
     json(res, 200, {
       ok: true,
       service: "rose-bot",
@@ -433,25 +672,11 @@ async function handle(req, res) {
     });
     return;
   }
-  if (url.pathname === "/sources") {
-    const token = process.env.ROSE_SERVICE_TOKEN || "";
-    const given = (req.headers.authorization || "").replace(/^Bearer\s+/i, "") || req.headers["x-rose-token"] || "";
-    if (!token || given !== token) {
-      json(res, 401, { ok: false, error: "unauthorized" });
+  if (url.pathname === "/articles") {
+    if (req.method !== "GET") {
+      json(res, 405, { ok: false, error: "method_not_allowed" });
       return;
     }
-    json(res, 200, { ok: true, sources: await db.all("SELECT * FROM news_sources ORDER BY priority DESC") });
-    return;
-  }
-  if (url.pathname === "/globe") {
-    json(res, 200, {
-      ok: true,
-      taxonomy_version: "rose-globe-2026-09-21",
-      countries: await listGlobeCountries(db),
-    });
-    return;
-  }
-  if (url.pathname === "/articles") {
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || 20));
     json(res, 200, {
       ok: true,
@@ -462,6 +687,40 @@ async function handle(req, res) {
         limit,
       ),
     });
+    return;
+  }
+  if (url.pathname === "/globe") {
+    if (req.method !== "GET") {
+      json(res, 405, { ok: false, error: "method_not_allowed" });
+      return;
+    }
+    json(res, 200, {
+      ok: true,
+      taxonomy_version: "rose-globe-2026-09-21",
+      countries: await listGlobeCountries(db),
+    });
+    return;
+  }
+  if (url.pathname === "/sources") {
+    if (req.method !== "GET") {
+      json(res, 405, { ok: false, error: "method_not_allowed" });
+      return;
+    }
+    const envToken = process.env.ROSE_SERVICE_TOKEN || "";
+    const given = bearerFromRequest(req);
+    const envOk = Boolean(envToken && given && given === envToken);
+    if (!envOk) {
+      const auth = await authorizeApiKey(req, SCOPE_READ);
+      if (auth.error) {
+        json(res, auth.status, { ok: false, error: auth.error });
+        return;
+      }
+    }
+    json(res, 200, { ok: true, sources: await listSources() });
+    return;
+  }
+  if (url.pathname.startsWith("/v1/")) {
+    await handleV1(req, res, url);
     return;
   }
   json(res, 404, { ok: false, error: "not_found" });

@@ -12,8 +12,8 @@ Three GitHub repos, one Postgres. **No rose-service.**
 
 ```
 visitor  →  rose-web-public  →  Postgres (read article_geo_sentiment + articles)
-operator →  rose-web-admin   →  Postgres (auth + write news_sources)
-rose-bot →  Postgres (read config, write articles)
+operator →  rose-web-admin   →  Postgres (auth, news_sources, api_keys)
+rose-bot →  Postgres (read config, write articles; enforce API keys on /v1)
 ```
 
 ## Rules
@@ -30,18 +30,24 @@ rose-bot →  Postgres (read config, write articles)
 
 | Path | What |
 | --- | --- |
-| `GET /health` | `{ ok, service: "rose-bot", engine: "postgres", lastTick, articles, sources }` |
+| `GET /health` | `{ ok, service: "rose-bot", engine: "postgres", lastTick, articles, sources, globe }` |
 | `GET /articles` | Recent titles (no body) |
-| `GET /sources` | **401** unless `ROSE_SERVICE_TOKEN` matches `Authorization: Bearer` or `X-Rose-Token` |
+| `GET /globe` | Aggregated country tones for the public globe |
+| `GET /sources` | **401** unless `ROSE_SERVICE_TOKEN` or a hashed admin API key (`bot:read`) matches `Authorization: Bearer` / `X-Rose-Key` / `X-Rose-Token` |
+| `GET /v1/status` | API-key (`bot:read`): health + key metadata |
+| `GET /v1/sources` | API-key (`bot:read`): source list |
+| `POST /v1/tick` | API-key (`bot:command`): run one scrape tick |
+| `POST /v1/sources` | API-key (`bot:command`): create source |
+| `POST /v1/sources/:id` | API-key (`bot:command`): update / pause source |
 
-Live Railway service **rose**: `node server.js`, healthcheck `/health`.
+Live Railway service **rose**: `node server.js`, healthcheck `/health`. Command API: [`bot-command-api.md`](./bot-command-api.md). Keys are minted in rose-web-admin (`/keys`).
 
 ## Web apps
 
 Both Next.js App Router. Railway start: `npm start` (`next start`). Health: `/health`.
 
-**rose-web-admin** env extra: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`. No public signup. First admin is seeded if that email is missing.
+**rose-web-admin** env extra: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`. No public signup. First admin is seeded if that email is missing. API keys: `/keys` (hash at rest). No extra env for keys.
 
-Auth tables (`user`, `session`, `account`, `verification`) are created by admin on first boot. Scrape tables are owned by rose-bot and are not recreated by the web apps.
+Auth tables (`user`, `session`, `account`, `verification`) are created by admin on first boot. `api_keys` is created by admin or rose-bot. Scrape tables are owned by rose-bot and are not recreated by the web apps.
 
 Live: https://rose-web-admin-production.up.railway.app and https://rose-web-public-production.up.railway.app.
