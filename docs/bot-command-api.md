@@ -17,7 +17,7 @@ or `X-Rose-Key: <secret>` (or `X-Rose-Token`).
 | Scope | Endpoints |
 | --- | --- |
 | `bot:read` | `GET /v1/status`, `GET /v1/sources` (also accepted on legacy `GET /sources`) |
-| `bot:command` | `POST /v1/tick`, `POST /v1/sources`, `POST /v1/sources/:id` |
+| `bot:command` | `POST /v1/tick`, `POST /v1/sources`, `POST /v1/sources/:id`, `POST /crawl` |
 
 Admin-issued keys get both scopes. Revoked keys (`revoked_at` set) return 401. Wrong scope returns 403.
 
@@ -98,7 +98,7 @@ curl -sS -X POST "$ROSE_BOT_URL/v1/tick" \
 | Var | Required | Role |
 | --- | --- | --- |
 | `DATABASE_URL` | **yes** | Shared Postgres with admin; `api_keys` + scrape tables |
-| `ROSE_SERVICE_TOKEN` | no | Legacy static bearer for `GET /sources` only. Prefer hashed admin keys. |
+| `ROSE_SERVICE_TOKEN` | no | Legacy static bearer for `GET /sources` and `POST /crawl`. Prefer hashed admin keys. |
 
 No env var holds the admin-minted secret. Generate keys in rose-web-admin at `/keys`.
 

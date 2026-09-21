@@ -22,19 +22,21 @@ App map: [`web.md`](./web.md).
 
 | Path | What |
 | --- | --- |
-| `GET /health` | 200 `{ ok, service: "rose-bot", engine: "postgres", lastTick, articles, sources, globe }` |
+| `GET /health` | 200 `{ ok, service: "rose-bot", engine: "postgres", lastTick, lastCrawlTick, crawlEnabled, articles, sources, globe }` |
 | `GET /articles` | Recently stored articles (no body) |
 | `GET /globe` | Aggregated country tones for the public globe |
 | `GET /sources` | 401 unless `ROSE_SERVICE_TOKEN` or an admin API key matches |
+| `GET /crawl` | Crawler status, frontier counts, knobs |
+| `POST /crawl` | `{ "enabled": true/false }` — `ROSE_SERVICE_TOKEN` or admin API key (`bot:command`) |
 | `/v1/*` | Hashed API keys from rose-web-admin. See [`bot-command-api.md`](./bot-command-api.md) |
 
-Each tick (default **15 minutes**): pick **1** eligible source (`status` in `ok`/`unknown`, `next_eligible_at`, rotate by priority / least-recent success), fetch RSS, record every item URL in `url_ledger` (never fetch a URL twice), honor `robots.txt`, fetch at most **3** new articles, wait ≥2s (or Crawl-delay) between requests, then set that source’s `next_eligible_at` **6 hours** later. `paused` is never picked.
+Each tick (default **15 minutes**): pick **1** eligible source (`status` in `ok`/`unknown`, `next_eligible_at`, rotate by priority / least-recent success), fetch RSS, record every item URL in `url_ledger` (never fetch a URL twice), honor `robots.txt`, fetch at most **3** new articles, wait ≥2s (or Crawl-delay) between requests, then set that source’s `next_eligible_at` **6 hours** later. `paused` is never picked. If the crawler is enabled, the same tick then runs a **small** recursive crawl (default 2 fetches, 1 per host, ≥5s delay). See [`crawler.md`](./crawler.md).
 
 English-only first-run seeds (only if `news_sources` is empty): BBC World, NPR News, The Guardian World, Al Jazeera English. After that, **rose-web-admin** owns source config.
 
 Jev globe pass runs after each scrape tick (`jev-globe.js`). Live calls need `TYPESAFE_API_KEY`. Without it, mock fixtures. Details: [`globe-country-sentiment.md`](./globe-country-sentiment.md).
 
-Local one-shot: `npm run scrape-once` (still needs `DATABASE_URL`).
+Local one-shot: `npm run scrape-once` (RSS) or `npm run crawl-once` (crawler). Both need `DATABASE_URL`. The crawler stays **off** until `CRAWL_ENABLED=1` (first boot) or `POST /crawl`.
 
 ## Railway
 

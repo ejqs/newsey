@@ -9,11 +9,13 @@ This repo is **rose-bot**. Globe **Jev** (country + sentiment) runs after each s
 
 ```bash
 # Requires DATABASE_URL (Postgres). No SQLite.
-npm start   # PORT (default 43123). GET /health  GET /articles  GET /globe  /v1/* (API keys)
-npm test    # Jev globe gates + api-keys token/hash checks
+npm start        # PORT (default 43123). GET /health  GET /articles  GET /globe  GET /crawl  /v1/* (API keys)
+npm run scrape-once
+npm run crawl-once   # one crawl tick; crawler is off by default in npm start
+npm test         # Jev globe gates + api-keys + crawler policy/robots checks
 ```
 
-Requires **Node 22+**.
+Requires **Node 22+**. Crawler on/off and robots rules: [docs/crawler.md](docs/crawler.md).
 
 ## Jev skill (installed)
 

@@ -11,17 +11,20 @@ import {
   SCOPE_COMMAND,
   SCOPE_READ,
 } from "./api-keys.js";
+import { crawlEnabled, crawlStats, crawlTick, ensureCrawlSetting, setSetting } from "./crawler.js";
+import { RSS_FLOOR_DELAY_MS, ROBOTS_TTL_HOURS } from "./lib/config.js";
+import { htmlToText, parseFeed } from "./lib/html.js";
+import { httpGet } from "./lib/http.js";
+import { parseRobots, robotsAllows } from "./lib/robots.js";
 
 const PORT = Number(process.env.PORT) || 43123;
-const UA = "RoseBot/0.1 (+https://github.com/ejqs/newsey)";
 const TICK_MS = Number(process.env.TICK_MS) || 15 * 60 * 1000;
 const MAX_SOURCES = Number(process.env.MAX_SOURCES_PER_TICK) || 1;
 const MAX_FETCHES = Number(process.env.MAX_FETCHES_PER_TICK) || 3;
 const SOURCE_GAP_HOURS = Number(process.env.SOURCE_GAP_HOURS) || 6;
-const ROBOTS_TTL_HOURS = Number(process.env.ROBOTS_TTL_HOURS) || 24;
-const FETCH_TIMEOUT_MS = 20_000;
-const FLOOR_DELAY_MS = 2000;
+const FLOOR_DELAY_MS = RSS_FLOOR_DELAY_MS;
 const ONCE = process.argv.includes("--once");
+const CRAWL_ONCE = process.argv.includes("--crawl-once");
 
 const SEEDS = [
   {
@@ -79,59 +82,8 @@ async function seedSources() {
   }
 }
 
-async function httpGet(url) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      signal: ctrl.signal,
-      headers: { "user-agent": UA, accept: "text/html,application/xml,application/rss+xml,text/xml,*/*" },
-      redirect: "follow",
-    });
-    const text = await res.text();
-    return { status: res.status, headers: res.headers, text, finalUrl: res.url };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function parseRobots(body) {
-  const lines = body.split(/\r?\n/).map((l) => l.replace(/#.*$/, "").trim());
-  const groups = [];
-  let cur = null;
-  for (const line of lines) {
-    if (!line) continue;
-    const [k, ...rest] = line.split(":");
-    const key = k.trim().toLowerCase();
-    const val = rest.join(":").trim();
-    if (key === "user-agent") {
-      cur = { agents: [val.toLowerCase()], allow: [], disallow: [], crawlDelay: null };
-      groups.push(cur);
-    } else if (!cur) continue;
-    else if (key === "allow") cur.allow.push(val);
-    else if (key === "disallow") cur.disallow.push(val);
-    else if (key === "crawl-delay") cur.crawlDelay = Number(val) || null;
-  }
-  return groups;
-}
-
-function robotsAllows(groups, pathname) {
-  const ua = UA.toLowerCase();
-  const match =
-    groups.find((g) => g.agents.some((a) => a !== "*" && (ua.includes(a) || a.includes("rose")))) ||
-    groups.find((g) => g.agents.includes("*"));
-  if (!match) return { allowed: true, crawlDelay: null };
-  const rules = [
-    ...match.allow.map((p) => ({ p, allow: true })),
-    ...match.disallow.map((p) => ({ p, allow: false })),
-  ].sort((a, b) => b.p.length - a.p.length);
-  for (const r of rules) {
-    if (!r.p) continue;
-    if (pathname.startsWith(r.p) || r.p === "/") {
-      return { allowed: r.allow, crawlDelay: match.crawlDelay };
-    }
-  }
-  return { allowed: true, crawlDelay: match.crawlDelay };
+function robotsGroups(body) {
+  return parseRobots(body).groups;
 }
 
 async function refreshRobots(source) {
@@ -142,6 +94,23 @@ async function refreshRobots(source) {
     const res = await httpGet(`${origin}/robots.txt`);
     const t = nowIso();
     const ttlUntil = new Date(Date.now() + ROBOTS_TTL_HOURS * 3600_000).toISOString();
+    if (res.status === 401 || res.status === 403) {
+      const deny = "User-agent: *\nDisallow: /\n";
+      await db.run(
+        `UPDATE news_sources SET robots_checked_at=?, robots_ttl_until=?, robots_body=?, status=?, last_error=?, updated_at=? WHERE id=?`,
+        t,
+        ttlUntil,
+        deny,
+        "robots_disallow",
+        `robots HTTP ${res.status}`,
+        t,
+        source.id,
+      );
+      return { ...source, robots_body: deny, robots_ttl_until: ttlUntil, status: "robots_disallow" };
+    }
+    if (res.status >= 500) {
+      return { ...source, robots_unavailable: true, last_error: `robots HTTP ${res.status}` };
+    }
     if (res.status >= 400) {
       await db.run(
         `UPDATE news_sources SET robots_checked_at=?, robots_ttl_until=?, robots_body=?, updated_at=? WHERE id=?`,
@@ -153,7 +122,7 @@ async function refreshRobots(source) {
       );
       return { ...source, robots_body: "", robots_ttl_until: ttlUntil };
     }
-    const groups = parseRobots(res.text);
+    const groups = robotsGroups(res.text);
     const delay = groups.find((g) => g.crawlDelay != null)?.crawlDelay ?? null;
     await db.run(
       `UPDATE news_sources SET robots_checked_at=?, robots_ttl_until=?, robots_body=?, crawl_delay_seconds=?, updated_at=? WHERE id=?`,
@@ -173,7 +142,7 @@ async function refreshRobots(source) {
       t,
       source.id,
     );
-    return source;
+    return { ...source, robots_unavailable: true, last_error: `robots: ${err.message}`.slice(0, 400) };
   }
 }
 
@@ -185,49 +154,6 @@ function pathAllowed(source, url) {
   } catch {
     return { allowed: false, crawlDelay: null };
   }
-}
-
-function decode(s) {
-  return s
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'");
-}
-
-function tag(block, name) {
-  const m = block.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "i"));
-  return m ? decode(m[1]).trim() : "";
-}
-
-function parseFeed(xml) {
-  const items = [];
-  const chunks = xml.match(/<item[\s\S]*?<\/item>/gi) || xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
-  for (const block of chunks) {
-    let link = tag(block, "link");
-    if (!link) {
-      const href = block.match(/<link[^>]+href=["']([^"']+)["']/i);
-      link = href ? href[1] : "";
-    }
-    if (!link) link = tag(block, "guid");
-    const title = tag(block, "title") || "(untitled)";
-    const published = tag(block, "pubDate") || tag(block, "published") || tag(block, "updated") || null;
-    const desc = tag(block, "description") || tag(block, "summary") || tag(block, "content") || "";
-    if (link && link.startsWith("http")) items.push({ url: link.split(" ").pop(), title, published, desc });
-  }
-  return items;
-}
-
-function htmlToText(html) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 async function rememberUrl(sourceId, url, outcome, note) {
@@ -294,6 +220,13 @@ async function scrapeTick() {
     let source = await refreshRobots(raw);
     const t = nowIso();
     await markSource(source, { last_attempt_at: t });
+    if (source.robots_unavailable) {
+      await markSource(source, {
+        last_error: source.last_error || "robots unavailable",
+        next_eligible_at: new Date(Date.now() + ROBOTS_TTL_HOURS * 3600_000).toISOString(),
+      });
+      continue;
+    }
     const feedCheck = pathAllowed(source, source.feed_url);
     if (!feedCheck.allowed) {
       await markSource(source, {
@@ -399,15 +332,19 @@ async function scrapeTick() {
 }
 
 let lastTick = null;
+let lastCrawlTick = null;
 let ticking = false;
 
-async function runTick() {
+async function runTick({ rss = true, crawl = true } = {}) {
   if (ticking) return lastTick;
   ticking = true;
   try {
-    const scrape = await scrapeTick();
-    const jev = await jevGlobeTick(db);
-    lastTick = { ...scrape, jev };
+    if (rss) {
+      const scrape = await scrapeTick();
+      const jev = await jevGlobeTick(db);
+      lastTick = { ...scrape, jev };
+    }
+    if (crawl) lastCrawlTick = await crawlTick(db, { force: CRAWL_ONCE });
   } finally {
     ticking = false;
   }
@@ -533,9 +470,12 @@ async function handleV1(req, res, url) {
       engine: "postgres",
       key: publicKey(key),
       lastTick,
+      lastCrawlTick,
+      crawlEnabled: await crawlEnabled(db),
       ticking,
       articles: countN(await db.get("SELECT COUNT(*) AS n FROM articles")),
       sources: countN(await db.get("SELECT COUNT(*) AS n FROM news_sources")),
+      globe: countN(await db.get("SELECT COUNT(*) AS n FROM article_geo_sentiment WHERE eligible = 1")),
     });
     return;
   }
@@ -561,7 +501,7 @@ async function handleV1(req, res, url) {
       return;
     }
     const tick = await runTick();
-    json(res, 200, { ok: true, action: "tick", tick });
+    json(res, 200, { ok: true, action: "tick", tick, crawl: lastCrawlTick });
     return;
   }
 
@@ -666,6 +606,8 @@ async function handle(req, res) {
       product: "rose",
       engine: "postgres",
       lastTick,
+      lastCrawlTick,
+      crawlEnabled: await crawlEnabled(db),
       articles: countN(await db.get("SELECT COUNT(*) AS n FROM articles")),
       sources: countN(await db.get("SELECT COUNT(*) AS n FROM news_sources")),
       globe: countN(await db.get("SELECT COUNT(*) AS n FROM article_geo_sentiment WHERE eligible = 1")),
@@ -701,6 +643,38 @@ async function handle(req, res) {
     });
     return;
   }
+  if (url.pathname === "/crawl") {
+    if (req.method === "GET") {
+      json(res, 200, { ok: true, lastCrawlTick, ...(await crawlStats(db)) });
+      return;
+    }
+    if (req.method === "POST") {
+      const envToken = process.env.ROSE_SERVICE_TOKEN || "";
+      const given = bearerFromRequest(req);
+      const envOk = Boolean(envToken && given && given === envToken);
+      if (!envOk) {
+        const key = await requireApiKey(req, res, SCOPE_COMMAND);
+        if (!key) return;
+      }
+      let enabled;
+      const raw = await readBody(req);
+      if (raw.trim()) {
+        try {
+          enabled = JSON.parse(raw).enabled;
+        } catch {
+          json(res, 400, { ok: false, error: "invalid_json" });
+          return;
+        }
+      } else {
+        enabled = url.searchParams.get("enabled") === "1" || url.searchParams.get("enabled") === "true";
+      }
+      await setSetting(db, "crawl_enabled", enabled ? "1" : "0");
+      json(res, 200, { ok: true, enabled: await crawlEnabled(db) });
+      return;
+    }
+    json(res, 405, { ok: false, error: "method_not_allowed" });
+    return;
+  }
   if (url.pathname === "/sources") {
     if (req.method !== "GET") {
       json(res, 405, { ok: false, error: "method_not_allowed" });
@@ -729,6 +703,7 @@ async function handle(req, res) {
 async function main() {
   db = await openDb();
   await seedSources();
+  await ensureCrawlSetting(db);
   const server = http.createServer((req, res) => {
     handle(req, res).catch((err) => {
       console.error("request failed", err);
@@ -736,13 +711,14 @@ async function main() {
     });
   });
   server.listen(PORT, "0.0.0.0", async () => {
-    console.log(`rose-bot listening on ${PORT} (${db.label})`);
+    console.log(`rose-bot listening on ${PORT} (${db.label}); crawl ${await crawlEnabled(db) ? "on" : "off"}`);
     try {
-      await runTick();
+      if (CRAWL_ONCE && !ONCE) await runTick({ rss: false, crawl: true });
+      else await runTick({ rss: true, crawl: true });
     } catch (err) {
       console.error("initial tick failed", err);
     }
-    if (ONCE) {
+    if (ONCE || CRAWL_ONCE) {
       server.close();
       await db.close();
       process.exit(0);

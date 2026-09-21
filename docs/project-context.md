@@ -37,6 +37,7 @@ Rose scrapes news **over the long term** (paced, robots-respecting), uses **Jev*
 | **Gather vs judge** | Scrapers/fetchers/NER gather; Jev structures; app upserts DB rows |
 | **Crawl pace** | Spread work over weeks/months; small batches per cron; “slow completeness” |
 | **robots.txt** | Always fetch and honor robots.txt before scraping a host/path |
+| **Crawler (optional)** | Off by default. Recursive URL discovery; scrape only allowlisted news. See [`crawler.md`](./crawler.md) |
 | **English only** | Seeded sources are English-language outlets; articles stored with `lang=en` |
 | **No double-scrape** | Every article URL is written to `url_ledger` before fetch; existing URLs are never fetched again |
 | **Recursion** | Deepen entities/claims only to enrich profiles, within daily budgets |
@@ -65,10 +66,12 @@ Schema, statuses, and cron batching: [`jev-ai-fanout.md`](./jev-ai-fanout.md). R
 
 | Path | What |
 | --- | --- |
-| `GET /health` | `{ ok: true, service: "rose-bot", engine: "postgres", lastTick, articles, sources, globe }` |
+| `GET /health` | `{ ok: true, service: "rose-bot", engine: "postgres", lastTick, lastCrawlTick, crawlEnabled, articles, sources, globe }` |
 | `GET /articles` | Recently stored articles (title, url, timestamps; no full body) |
 | `GET /globe` | Aggregated country tones for the public globe |
 | `GET /sources` | Token-gated (`ROSE_SERVICE_TOKEN` or admin API key). Ops fields belong in rose-web-admin. |
+| `GET /crawl` | Crawler status. Off by default. [`crawler.md`](./crawler.md) |
+| `POST /crawl` | Enable/disable crawler (`ROSE_SERVICE_TOKEN` or admin API key). |
 | `/v1/*` | Command API. Keys from rose-web-admin `/keys`. [`bot-command-api.md`](./bot-command-api.md) |
 
 ### Pace
@@ -91,7 +94,9 @@ English RSS only:
 3. The Guardian World — `https://www.theguardian.com/world/rss`
 4. Al Jazeera English — `https://www.aljazeera.com/xml/rss/all.xml`
 
-User-Agent: `RoseBot/0.1 (+https://github.com/ejqs/newsey)`.
+User-Agent: `RoseBot/0.2 (+https://github.com/ejqs/newsey; +https://github.com/ejqs/newsey/issues)`.
+
+Optional **ethical crawler** (off by default): recursively gathers public URLs, scrapes into `articles` only when the host is a known newsroom. On/off, seeds, rate limits, and robots rules: [`crawler.md`](./crawler.md).
 
 Local and production use Railway **Postgres** via `DATABASE_URL`. The bot exits if it is missing.
 

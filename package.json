@@ -11,7 +11,8 @@
     "scrape-once": "node server.js --once",
     "jev-once": "node jev-globe.js",
     "seed-globe-sample": "node scripts/seed-globe-sample.js",
-    "test": "node --test jev-globe.test.js api-keys.test.js"
+    "crawl-once": "node server.js --crawl-once",
+    "test": "node --test jev-globe.test.js api-keys.test.js test/*.test.js"
   },
   "dependencies": {
     "pg": "^8.23.0"

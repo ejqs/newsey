@@ -2,8 +2,8 @@
 
 **Product:** [Rose](./project-context.md) — Recursive Opinionated Search Engine  
 **Audience:** Earlan  
-**Status:** Mini scrape is live on Railway **rose**. Production DB is **Postgres**. **Globe Jev** (country + sentiment) is additive; the rest of the opinionated taxonomy is still later.  
-**Updated:** 2026-09-20
+**Status:** Mini scrape is live on Railway **rose**. Production DB is **Postgres**. **Globe Jev** (country + sentiment) is additive; the rest of the opinionated taxonomy is still later. Optional ethical crawler is in rose-bot and **off by default**.  
+**Updated:** 2026-09-21
 
 ## Product loop
 
@@ -160,6 +160,14 @@ Mandatory before any HTML/list/article fetch for a host:
 6. Re-check on TTL or after repeated blocks (site policy may change).
 
 RSS/API endpoints: still check robots for the host; if the feed URL is disallowed, mark `robots_disallow` and stop. Prefer licensed APIs when robots blocks scraping.
+
+---
+
+## Recursive crawler (optional, off by default)
+
+Operator guide: [`crawler.md`](./crawler.md).
+
+Extra tables (created by rose-bot): `bot_settings`, `host_robots`, `crawl_frontier`. Scraped bodies still go to `articles` + `url_ledger`. Credibility is an allowlist (known newsrooms + `news_sources` + `CRAWL_NEWS_DOMAINS`), not “any URL with article markup.” robots.txt is not optional: unread/forbidden robots.txt means do not fetch that host.
 
 ---
 
