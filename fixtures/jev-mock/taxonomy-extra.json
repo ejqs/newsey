@@ -1,0 +1,49 @@
+{
+  "model": "jev-latest",
+  "answers": {
+    "worth_hopping_into": {
+      "type": "noul",
+      "noul": 0.82
+    },
+    "article_kind": {
+      "type": "choice",
+      "choice": "analysis",
+      "probabilities": {
+        "breaking": 0.04,
+        "analysis": 0.78,
+        "opinion": 0.08,
+        "profile": 0.03,
+        "explainer": 0.04,
+        "press_release": 0.01,
+        "other": 0.02
+      },
+      "confidence": 0.74
+    },
+    "primary_topic": {
+      "type": "choice",
+      "choice": "war_conflict",
+      "probabilities": {
+        "politics": 0.08,
+        "elections": 0.02,
+        "economy": 0.04,
+        "business": 0.02,
+        "tech": 0.01,
+        "science": 0.01,
+        "health": 0.01,
+        "climate": 0.01,
+        "war_conflict": 0.72,
+        "crime_law": 0.03,
+        "culture": 0.02,
+        "sports": 0.01,
+        "other": 0.02
+      },
+      "confidence": 0.66
+    }
+  },
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  },
+  "_mock": true,
+  "_note": "Canned System One extra taxonomy answers (hop-in + metadata) when TYPESAFE_API_KEY is unset. Merged with globe-*.json; do not invent fields."
+}

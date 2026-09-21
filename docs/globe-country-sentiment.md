@@ -11,7 +11,7 @@ Additive Jev pass. Scrapers still gather articles; this job does not change craw
 After each scrape tick (and via `npm run jev-once`), rose-bot selects `articles` that have **no** `article_geo_sentiment` row, up to `MAX_JEV_PER_TICK` (default 8). Existing `jev_status=skipped` rows are eligible — the scrape INSERT is unchanged.
 
 1. Build TypeSafe **state** `{ title, url, source, body }` (`body` truncated to 6k chars).
-2. Call **Jev** (`POST /v1/systemone`, model `jev-latest`) with the questions below.
+2. Call **Jev** (`POST /v1/systemone`, model `jev-latest`) with **enabled** `jev_questions` rows (country+sentiment plus hop-in and metadata; see [`jev-questions.md`](./jev-questions.md)).
 3. Persist raw answers on `jev_analyses` and a denormalized row on `article_geo_sentiment`.
 4. Set `articles.jev_status` to `done` (or `error` on failure).
 
@@ -19,7 +19,7 @@ If `TYPESAFE_API_KEY` is empty, **do not** call the hosted API. Load `fixtures/j
 
 ## Jev questions (conservative country)
 
-Fan-out in **two** requests so each Choice stays well under 255 options. Stage 2 is skipped when stage 1 says there is no country.
+These four IDs are **seeded `jev_questions` rows**, not the only taxonomy. Operators can add hop-in and metadata questions without a deploy ([`jev-questions.md`](./jev-questions.md)). Fan-out still uses **two** requests so the country Choice stays well under 255 options. Stage 2 is skipped when stage 1 says there is no country.
 
 | ID | Type | Stage | Criteria |
 | --- | --- | --- | --- |
@@ -52,9 +52,11 @@ Per country, over eligible rows:
 
 ## Tables (bot-owned)
 
-`jev_analyses` — raw System One `answers` JSON, `taxonomy_version=rose-globe-2026-09-21`, `scope=article`.
+`jev_analyses` — raw System One `answers` JSON, `taxonomy_version=rose-globe-2026-09-21`, `scope=article`. Additive `question_ids` lists which `jev_questions` were sent.
 
 `article_geo_sentiment` — one row per article: `country_iso`, `sentiment`, `confidence`, `eligible`.
+
+`jev_questions` — Choice / Score / Noul definitions loaded each tick. Globe IDs stay seeded. [`jev-questions.md`](./jev-questions.md).
 
 `CREATE TABLE IF NOT EXISTS` on boot. No change to `news_sources` / `url_ledger` / article scrape columns.
 

@@ -2,7 +2,7 @@
 
 **Product:** [Rose](./project-context.md) — Recursive Opinionated Search Engine  
 **Audience:** Earlan  
-**Status:** Mini scrape is live on Railway **rose**. Production DB is **Postgres**. **Globe Jev** (country + sentiment) is additive; the rest of the opinionated taxonomy is still later. Optional ethical crawler is in rose-bot and **off by default**.  
+**Status:** Mini scrape is live on Railway **rose**. Production DB is **Postgres**. **Jev questions are data** (`jev_questions`); globe country+sentiment is the seeded first slice plus hop-in and article metadata. Optional ethical crawler is in rose-bot and **off by default**.  
 **Updated:** 2026-09-21
 
 ## Product loop
@@ -89,6 +89,7 @@ Structured Jev judgments. One row per **(subject, taxonomy_version, model)** ana
 | `taxonomy_version` | text | e.g. `rose-tax-2026-09-20` |
 | `model` | text | Pinned Jev model id |
 | `answers` | json | Map question_id → { type, choice/score/noul, probabilities, confidence } |
+| `question_ids` | json null | Keys asked on this run (enabled `jev_questions`) |
 | `input_token_estimate` | int null | |
 | `created_at` | timestamptz | |
 
@@ -114,6 +115,20 @@ Denormalized globe row, one per article. Written by the additive Jev country+sen
 | `confidence` / `about_country` | float | From Jev |
 | `taxonomy_version` / `model` / `analyzed_at` | text | |
 
+### 5. `jev_questions`
+
+Operator-editable TypeSafe questions. Loaded each Jev tick. Seeded on bot boot (`ON CONFLICT DO NOTHING`). Details: [`jev-questions.md`](./jev-questions.md).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `question_id` | text unique | System One map key |
+| `type` | text | `choice` · `score` · `noul` |
+| `instructions` | json | String or structured object |
+| `criteria` | json null | Choice map, Score levels, optional Noul true/false |
+| `depends_on` | text null | Follow-up after another answer (`region` for `primary_country`) |
+| `criteria_source` | text null | `countries_in_region` fills ISO options at runtime |
+| `enabled` | int | `0` = skip on the next scrape |
+
 ---
 
 ## Crawl policy: slow completeness
@@ -132,7 +147,7 @@ Denormalized globe row, one per article. Written by the additive Jev country+sen
 5. Per source: discover a few new article URLs (feed items or list page), skip URLs already in `articles`, fetch only up to remaining budget.  
 6. On success: insert `articles`, bump `last_success_at`, set `status=ok`, schedule `next_eligible_at = now() + max(crawl_delay, source_spacing)`.  
 7. On failure: update `status` (`blocked` / `broken`), store `last_error`, exponential-ish backoff on `next_eligible_at`.  
-8. Jev globe pass: pick `articles` with no `article_geo_sentiment` row (analysis can lag scrape). Write `jev_analyses` + `article_geo_sentiment`, set `jev_status=done`. See [`globe-country-sentiment.md`](./globe-country-sentiment.md).
+8. Jev pass: pick `articles` with no `article_geo_sentiment` row (analysis can lag scrape). Load enabled `jev_questions`, write `jev_analyses` + `article_geo_sentiment`, set `jev_status=done`. See [`globe-country-sentiment.md`](./globe-country-sentiment.md) and [`jev-questions.md`](./jev-questions.md).
 
 **Long-term completeness** = many small runs + fairness rotation across `news_sources`, not one giant crawl. New sources start `unknown` and trickle in.
 
@@ -192,15 +207,15 @@ news_sources (status, next_eligible_at)
 | --- | --- |
 | **Scrapers** | robots-aware, paced fetches; update `news_sources.status` |
 | **Extractors** | Candidate spans only |
-| **Jev** | Structured answers into `jev_analyses` |
-| **DB** | `news_sources` · `articles` · `jev_analyses` (+ profiles later) |
+| **Jev** | Structured answers into `jev_analyses` from enabled `jev_questions` |
+| **DB** | `news_sources` · `articles` · `jev_analyses` · `jev_questions` · `article_geo_sentiment` (+ profiles later) |
 | **Query LLM (later)** | NL → queries over structured rows |
 
 ---
 
-## Opinionated Jev taxonomy (starter — edit freely)
+## Opinionated Jev taxonomy (starter — edit as data)
 
-Labels are **ours**. Do not invent runtime category strings via a chat model.
+Labels are **ours**. Do not invent runtime category strings via a chat model. Live questions live in **`jev_questions`** ([`jev-questions.md`](./jev-questions.md)). Seeded now: globe country+sentiment, `worth_hopping_into`, `article_kind`, `primary_topic`. Add the rest below from admin when you want them — no bot deploy.
 
 ### A. Article-level
 

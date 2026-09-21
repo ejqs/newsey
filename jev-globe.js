@@ -1,10 +1,19 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { countryName, countriesInRegion, regionCriteria } from "./countries.js";
+import { countryName } from "./countries.js";
 import { loadMockAnswers, systemOne, typesafeKey } from "./jev-client.js";
 import { aggregateCountryTones } from "./globe-aggregate.js";
+import {
+  TAXONOMY_VERSION,
+  buildQuestionMap,
+  dependentSeedQuestions,
+  independentSeedQuestions,
+  listEnabledQuestions,
+  mergeExtraAnswers,
+  partitionQuestions,
+} from "./jev-questions.js";
 
-export const TAXONOMY_VERSION = "rose-globe-2026-09-21";
+export { TAXONOMY_VERSION };
 export const JEV_MODEL = "jev-latest";
 export const ABOUT_COUNTRY_MIN = 0.7;
 export const COUNTRY_CONFIDENCE_MIN = 0.45;
@@ -13,63 +22,12 @@ export const SENTIMENT_CONFIDENCE_MIN = 0.4;
 const BODY_CHARS = 6000;
 const MAX_JEV = Number(process.env.MAX_JEV_PER_TICK) || 8;
 
-const ABOUT_INSTRUCTIONS = {
-  question:
-    "Is this article primarily about one sovereign country — its government, people, territory, economy, or policies as the main subject?",
-  exclude:
-    "Datelines, reporter location, bylines, and passing mentions of several countries do not count. International roundups with no single-country focus are no.",
-  use: "Judge from `title` and `body`. Ignore `url` except as weak context.",
-};
-
-export function stage1Questions() {
-  return {
-    about_primary_country: {
-      type: "noul",
-      instructions: ABOUT_INSTRUCTIONS,
-      criteria: {
-        true: "One country is clearly the subject of the piece.",
-        false: "No single country is the subject, or geography is only a dateline/bylines/roundup.",
-      },
-    },
-    region: {
-      type: "choice",
-      instructions: {
-        question:
-          "If the article is mainly about one country, which world region is that country in? Choose `none` when there is no single-country subject.",
-        exclude: "Do not pick a region from a dateline or correspondent location alone.",
-      },
-      criteria: regionCriteria(),
-    },
-    country_sentiment: {
-      type: "choice",
-      instructions: {
-        question:
-          "How does the article talk about that country as a whole (government, people, or prospects)?",
-        note: "Judge tone toward the country, not toward one politician unless they stand in for the country. Use `not_applicable` if there is no primary country.",
-      },
-      criteria: {
-        positive: "Net good: progress, success, praise, constructive or hopeful coverage of the country.",
-        negative: "Net bad: crisis, failure, harm, condemnation, or bleak coverage of the country.",
-        mixed: "Both good and bad in similar weight, or the tone is conflicted.",
-        not_applicable: "No primary country, or the piece does not evaluate the country.",
-      },
-    },
-  };
+export function stage1Questions(rows) {
+  return buildQuestionMap(rows || independentSeedQuestions());
 }
 
-export function stage2Questions(region) {
-  return {
-    primary_country: {
-      type: "choice",
-      instructions: {
-        question:
-          "Which sovereign country is this article mainly about? Assume the country is in this region: `" +
-          region +
-          "`. Choose `none` if that is wrong or if the only geographic cues are a dateline, byline, or reporter location.",
-      },
-      criteria: countriesInRegion(region),
-    },
-  };
+export function stage2Questions(region, rows) {
+  return buildQuestionMap(rows || dependentSeedQuestions(), { region });
 }
 
 export function articleState(article) {
@@ -142,42 +100,70 @@ function shouldRunStage2(answers) {
   return about >= ABOUT_COUNTRY_MIN && region !== "none" && regionConf >= REGION_CONFIDENCE_MIN;
 }
 
-export async function analyzeArticle(article) {
+async function extraMockAnswers() {
+  try {
+    const extra = await loadMockAnswers("taxonomy-extra.json");
+    return extra.answers || {};
+  } catch {
+    return {};
+  }
+}
+
+export async function analyzeArticle(article, questionRows) {
+  const rows = questionRows || [...independentSeedQuestions(), ...dependentSeedQuestions()];
+  const { independent, dependent } = partitionQuestions(rows);
   const state = articleState(article);
+  const asked = independent.concat(dependent).map((row) => row.question_id);
   if (!typesafeKey()) {
     const mock = await loadMockAnswers(mockFilenameForArticle(article));
+    const extras = await extraMockAnswers();
     return {
       model: mock.model || JEV_MODEL,
-      answers: mock.answers,
+      answers: mergeExtraAnswers(mock.answers, rows, extras),
       usage: mock.usage,
       mock: true,
+      asked,
+    };
+  }
+  const stage1QuestionsMap = stage1Questions(independent);
+  if (!Object.keys(stage1QuestionsMap).length) {
+    return {
+      model: JEV_MODEL,
+      answers: {},
+      usage: { input_tokens: 0, output_tokens: 0 },
+      mock: false,
+      asked,
     };
   }
   const stage1 = await systemOne({
     state,
     model: JEV_MODEL,
-    questions: stage1Questions(),
+    questions: stage1QuestionsMap,
   });
   let answers = { ...stage1.answers };
   let usage = { ...(stage1.usage || {}) };
   if (shouldRunStage2(stage1.answers)) {
     const region = stage1.answers.region.choice;
-    const stage2 = await systemOne({
-      state,
-      model: JEV_MODEL,
-      questions: stage2Questions(region),
-    });
-    answers = { ...answers, ...stage2.answers };
-    usage = {
-      input_tokens: (usage.input_tokens || 0) + (stage2.usage?.input_tokens || 0),
-      output_tokens: (usage.output_tokens || 0) + (stage2.usage?.output_tokens || 0),
-    };
+    const stage2Map = stage2Questions(region, dependent);
+    if (Object.keys(stage2Map).length) {
+      const stage2 = await systemOne({
+        state,
+        model: JEV_MODEL,
+        questions: stage2Map,
+      });
+      answers = { ...answers, ...stage2.answers };
+      usage = {
+        input_tokens: (usage.input_tokens || 0) + (stage2.usage?.input_tokens || 0),
+        output_tokens: (usage.output_tokens || 0) + (stage2.usage?.output_tokens || 0),
+      };
+    }
   }
   return {
     model: stage1.model || JEV_MODEL,
     answers,
     usage,
     mock: false,
+    asked,
   };
 }
 
@@ -185,13 +171,15 @@ export async function persistGlobeAnalysis(db, article, result) {
   const interpreted = interpretGlobeAnswers(result.answers);
   const ts = new Date().toISOString();
   const inputTokens = result.usage?.input_tokens ?? null;
+  const asked = result.asked || Object.keys(result.answers || {});
   await db.run(
     `INSERT INTO jev_analyses (
-      article_id, entity_key, claim_span, scope, taxonomy_version, model, answers, input_token_estimate, created_at
-    ) VALUES (?, ?, ?, 'article', ?, ?, ?, ?, ?)
+      article_id, entity_key, claim_span, scope, taxonomy_version, model, answers, input_token_estimate, question_ids, created_at
+    ) VALUES (?, ?, ?, 'article', ?, ?, ?, ?, ?, ?)
     ON CONFLICT (article_id, taxonomy_version, model) DO UPDATE SET
       answers = EXCLUDED.answers,
       input_token_estimate = EXCLUDED.input_token_estimate,
+      question_ids = EXCLUDED.question_ids,
       created_at = EXCLUDED.created_at`,
     article.id,
     null,
@@ -200,6 +188,7 @@ export async function persistGlobeAnalysis(db, article, result) {
     result.model || JEV_MODEL,
     JSON.stringify(result.answers),
     inputTokens,
+    JSON.stringify(asked),
     ts,
   );
   await db.run(
@@ -241,6 +230,10 @@ export async function persistGlobeAnalysis(db, article, result) {
 
 export async function jevGlobeTick(db, { limit } = {}) {
   const cap = limit ?? MAX_JEV;
+  const questionRows = await listEnabledQuestions(db);
+  if (!questionRows.length) {
+    return { pending: 0, analyzed: 0, errors: 0, mock: !typesafeKey(), questions: 0 };
+  }
   const pending = await db.all(
     `SELECT a.id, a.url, a.title, a.body_text, s.name AS source_name
      FROM articles a
@@ -255,7 +248,7 @@ export async function jevGlobeTick(db, { limit } = {}) {
   let errors = 0;
   for (const article of pending) {
     try {
-      const result = await analyzeArticle(article);
+      const result = await analyzeArticle(article, questionRows);
       await persistGlobeAnalysis(db, article, result);
       analyzed += 1;
     } catch (err) {
@@ -265,7 +258,13 @@ export async function jevGlobeTick(db, { limit } = {}) {
       console.error(`[jev-globe] article ${article.id} failed:`, err.message);
     }
   }
-  return { pending: pending.length, analyzed, errors, mock: !typesafeKey() };
+  return {
+    pending: pending.length,
+    analyzed,
+    errors,
+    mock: !typesafeKey(),
+    questions: questionRows.length,
+  };
 }
 
 export async function listGlobeCountries(db) {

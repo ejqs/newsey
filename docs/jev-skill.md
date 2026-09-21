@@ -52,7 +52,7 @@ Do not commit `.env`. Keep keys server-side; never log them.
 
 ## Local / mock fallback
 
-Until the key is set, agents and tests should treat [`fixtures/jev-mock/article-analysis.json`](../fixtures/jev-mock/article-analysis.json) as a canned System One response for a single article (Choice / Score / Noul shapes from the [HTTP API](https://docs.typesafe.ai/api.md)). Globe questions use [`fixtures/jev-mock/globe-ukraine-negative.json`](../fixtures/jev-mock/globe-ukraine-negative.json) and sibling `globe-*.json` files.
+Until the key is set, agents and tests should treat [`fixtures/jev-mock/article-analysis.json`](../fixtures/jev-mock/article-analysis.json) as a canned System One response for a single article (Choice / Score / Noul shapes from the [HTTP API](https://docs.typesafe.ai/api.md)). Globe questions use [`fixtures/jev-mock/globe-ukraine-negative.json`](../fixtures/jev-mock/globe-ukraine-negative.json) and sibling `globe-*.json` files. Extra taxonomy (hop-in, metadata) uses [`fixtures/jev-mock/taxonomy-extra.json`](../fixtures/jev-mock/taxonomy-extra.json), merged onto the globe fixture.
 
 Rules when the key is missing:
 
@@ -60,6 +60,7 @@ Rules when the key is missing:
 - Do **not** invent extra request or response fields.
 - Map mock `answers` into `jev_analyses.answers` the same way a live response would be mapped.
 - Globe country+sentiment mocks: `fixtures/jev-mock/globe-*.json` (see [`globe-country-sentiment.md`](./globe-country-sentiment.md)).
+- Extra seeded questions: `fixtures/jev-mock/taxonomy-extra.json`. Operator-added questions without a fixture get a stub of the same answer shape.
 
 ## What was skipped (not official TypeSafe)
 

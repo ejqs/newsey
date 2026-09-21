@@ -476,6 +476,7 @@ async function handleV1(req, res, url) {
       articles: countN(await db.get("SELECT COUNT(*) AS n FROM articles")),
       sources: countN(await db.get("SELECT COUNT(*) AS n FROM news_sources")),
       globe: countN(await db.get("SELECT COUNT(*) AS n FROM article_geo_sentiment WHERE eligible = 1")),
+      jev_questions: countN(await db.get("SELECT COUNT(*) AS n FROM jev_questions WHERE enabled = 1")),
     });
     return;
   }
@@ -611,6 +612,7 @@ async function handle(req, res) {
       articles: countN(await db.get("SELECT COUNT(*) AS n FROM articles")),
       sources: countN(await db.get("SELECT COUNT(*) AS n FROM news_sources")),
       globe: countN(await db.get("SELECT COUNT(*) AS n FROM article_geo_sentiment WHERE eligible = 1")),
+      jev_questions: countN(await db.get("SELECT COUNT(*) AS n FROM jev_questions WHERE enabled = 1")),
     });
     return;
   }
