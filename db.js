@@ -1,57 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
-
 const DATABASE_URL = process.env.DATABASE_URL || "";
-const DATA_DIR = process.env.DATA_DIR || (fs.existsSync("/data") ? "/data" : "./data");
-
-const SQLITE_SCHEMA = `
-CREATE TABLE IF NOT EXISTS news_sources (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  base_url TEXT NOT NULL,
-  feed_url TEXT,
-  scrape_method TEXT NOT NULL DEFAULT 'rss',
-  status TEXT NOT NULL DEFAULT 'unknown',
-  robots_checked_at TEXT,
-  robots_ttl_until TEXT,
-  robots_body TEXT,
-  crawl_delay_seconds INTEGER,
-  last_success_at TEXT,
-  last_attempt_at TEXT,
-  last_error TEXT,
-  priority INTEGER NOT NULL DEFAULT 0,
-  next_eligible_at TEXT NOT NULL,
-  articles_scraped_count INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS url_ledger (
-  url TEXT PRIMARY KEY,
-  source_id INTEGER NOT NULL,
-  first_seen_at TEXT NOT NULL,
-  last_seen_at TEXT NOT NULL,
-  outcome TEXT NOT NULL,
-  note TEXT,
-  FOREIGN KEY (source_id) REFERENCES news_sources(id)
-);
-CREATE TABLE IF NOT EXISTS articles (
-  id INTEGER PRIMARY KEY,
-  source_id INTEGER NOT NULL,
-  url TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  body_text TEXT NOT NULL,
-  published_at TEXT,
-  scraped_at TEXT NOT NULL,
-  content_hash TEXT NOT NULL,
-  lang TEXT,
-  raw_metadata TEXT,
-  jev_status TEXT NOT NULL DEFAULT 'skipped',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY (source_id) REFERENCES news_sources(id)
-);
-`;
 
 const PG_SCHEMA = `
 CREATE TABLE IF NOT EXISTS news_sources (
@@ -109,54 +56,32 @@ function toPg(sql) {
 }
 
 export async function openDb() {
-  if (DATABASE_URL) {
-    const pg = await import("pg");
-    const pool = new pg.default.Pool({
-      connectionString: DATABASE_URL,
-      max: 3,
-      ssl: { rejectUnauthorized: false },
-    });
-    await pool.query(PG_SCHEMA);
-    return {
-      kind: "postgres",
-      label: "postgres (DATABASE_URL)",
-      async run(sql, ...params) {
-        await pool.query(toPg(sql), params);
-      },
-      async get(sql, ...params) {
-        const r = await pool.query(toPg(sql), params);
-        return r.rows[0];
-      },
-      async all(sql, ...params) {
-        const r = await pool.query(toPg(sql), params);
-        return r.rows;
-      },
-      async close() {
-        await pool.end();
-      },
-    };
+  if (!DATABASE_URL) {
+    throw new Error("DATABASE_URL is required (Postgres only). Set it and retry.");
   }
-
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  const file = path.join(DATA_DIR, "rose.sqlite");
-  const sqlite = new DatabaseSync(file);
-  sqlite.exec("PRAGMA journal_mode = WAL;");
-  sqlite.exec("PRAGMA foreign_keys = ON;");
-  sqlite.exec(SQLITE_SCHEMA);
+  const pg = await import("pg");
+  const pool = new pg.default.Pool({
+    connectionString: DATABASE_URL,
+    max: 3,
+    ssl: { rejectUnauthorized: false },
+  });
+  await pool.query(PG_SCHEMA);
   return {
-    kind: "sqlite",
-    label: `sqlite ${file}`,
+    kind: "postgres",
+    label: "postgres (DATABASE_URL)",
     async run(sql, ...params) {
-      sqlite.prepare(sql).run(...params);
+      await pool.query(toPg(sql), params);
     },
     async get(sql, ...params) {
-      return sqlite.prepare(sql).get(...params);
+      const r = await pool.query(toPg(sql), params);
+      return r.rows[0];
     },
     async all(sql, ...params) {
-      return sqlite.prepare(sql).all(...params);
+      const r = await pool.query(toPg(sql), params);
+      return r.rows;
     },
     async close() {
-      sqlite.close();
+      await pool.end();
     },
   };
 }

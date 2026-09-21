@@ -20,7 +20,7 @@ Jev does not fetch or write articles. Scrapers gather; Jev condenses; the DB is 
 
 ## v0 database schema
 
-Three tables Earlan locked. **Postgres** on Railway rose; SQLite for local `npm start`.
+Three tables Earlan locked. **Postgres** on Railway (bot, public, and admin). No SQLite.
 
 ### 1. `news_sources`
 

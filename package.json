@@ -2,7 +2,7 @@
   "name": "newsey",
   "private": true,
   "type": "module",
-  "description": "Rose — paced, robots-respecting news ingest (Jev later)",
+  "description": "rose-bot — paced, robots-respecting news ingest (Postgres only)",
   "engines": {
     "node": ">=22"
   },
