@@ -2,7 +2,6 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { countryName, countriesInRegion, regionCriteria } from "./countries.js";
 import { loadMockAnswers, systemOne, typesafeKey } from "./jev-client.js";
-import { aggregateCountryTones } from "./globe-aggregate.js";
 
 export const TAXONOMY_VERSION = "rose-globe-2026-09-21";
 export const JEV_MODEL = "jev-latest";
@@ -181,112 +180,68 @@ export async function analyzeArticle(article) {
   };
 }
 
-export async function persistGlobeAnalysis(db, article, result) {
+export async function persistGlobeAnalysis(api, article, result) {
   const interpreted = interpretGlobeAnswers(result.answers);
-  const ts = new Date().toISOString();
   const inputTokens = result.usage?.input_tokens ?? null;
-  await db.run(
-    `INSERT INTO jev_analyses (
-      article_id, entity_key, claim_span, scope, taxonomy_version, model, answers, input_token_estimate, created_at
-    ) VALUES (?, ?, ?, 'article', ?, ?, ?, ?, ?)
-    ON CONFLICT (article_id, taxonomy_version, model) DO UPDATE SET
-      answers = EXCLUDED.answers,
-      input_token_estimate = EXCLUDED.input_token_estimate,
-      created_at = EXCLUDED.created_at`,
-    article.id,
-    null,
-    null,
-    TAXONOMY_VERSION,
-    result.model || JEV_MODEL,
-    JSON.stringify(result.answers),
-    inputTokens,
-    ts,
-  );
-  await db.run(
-    `INSERT INTO article_geo_sentiment (
-      article_id, country_iso, country_name, region, sentiment, confidence, about_country,
-      eligible, taxonomy_version, model, analyzed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT (article_id) DO UPDATE SET
-      country_iso = EXCLUDED.country_iso,
-      country_name = EXCLUDED.country_name,
-      region = EXCLUDED.region,
-      sentiment = EXCLUDED.sentiment,
-      confidence = EXCLUDED.confidence,
-      about_country = EXCLUDED.about_country,
-      eligible = EXCLUDED.eligible,
-      taxonomy_version = EXCLUDED.taxonomy_version,
-      model = EXCLUDED.model,
-      analyzed_at = EXCLUDED.analyzed_at`,
-    article.id,
-    interpreted.country_iso,
-    interpreted.country_name,
-    interpreted.region,
-    interpreted.sentiment,
-    interpreted.confidence,
-    interpreted.about_country,
-    interpreted.eligible,
-    TAXONOMY_VERSION,
-    result.model || JEV_MODEL,
-    ts,
-  );
-  await db.run(
-    `UPDATE articles SET jev_status = ?, updated_at = ? WHERE id = ?`,
-    "done",
-    ts,
-    article.id,
-  );
+  await api.upsertJevAnalysis({
+    article_id: article.id,
+    entity_key: null,
+    claim_span: null,
+    scope: "article",
+    taxonomy_version: TAXONOMY_VERSION,
+    model: result.model || JEV_MODEL,
+    answers: result.answers,
+    input_token_estimate: inputTokens,
+  });
+  await api.upsertGeoSentiment({
+    article_id: article.id,
+    country_iso: interpreted.country_iso,
+    country_name: interpreted.country_name,
+    region: interpreted.region,
+    sentiment: interpreted.sentiment,
+    confidence: interpreted.confidence,
+    about_country: interpreted.about_country,
+    eligible: interpreted.eligible,
+    taxonomy_version: TAXONOMY_VERSION,
+    model: result.model || JEV_MODEL,
+  });
+  await api.setJevStatus(article.id, "done");
   return interpreted;
 }
 
-export async function jevGlobeTick(db, { limit } = {}) {
+export async function jevGlobeTick(api, { limit } = {}) {
   const cap = limit ?? MAX_JEV;
-  const pending = await db.all(
-    `SELECT a.id, a.url, a.title, a.body_text, s.name AS source_name
-     FROM articles a
-     JOIN news_sources s ON s.id = a.source_id
-     LEFT JOIN article_geo_sentiment g ON g.article_id = a.id
-     WHERE g.article_id IS NULL
-     ORDER BY a.id DESC
-     LIMIT ?`,
-    cap,
-  );
+  const pending = await api.pendingGeo(cap);
   let analyzed = 0;
   let errors = 0;
   for (const article of pending) {
     try {
       const result = await analyzeArticle(article);
-      await persistGlobeAnalysis(db, article, result);
+      await persistGlobeAnalysis(api, article, result);
       analyzed += 1;
     } catch (err) {
       errors += 1;
-      const ts = new Date().toISOString();
-      await db.run(`UPDATE articles SET jev_status = ?, updated_at = ? WHERE id = ?`, "error", ts, article.id);
+      await api.setJevStatus(article.id, "error");
       console.error(`[jev-globe] article ${article.id} failed:`, err.message);
     }
   }
   return { pending: pending.length, analyzed, errors, mock: !typesafeKey() };
 }
 
-export async function listGlobeCountries(db) {
-  const rows = await db.all(
-    `SELECT country_iso, country_name, sentiment, confidence, eligible
-     FROM article_geo_sentiment
-     WHERE eligible = 1 AND country_iso IS NOT NULL`,
-  );
-  return aggregateCountryTones(rows);
+export async function listGlobeCountries(api) {
+  return api.globe();
 }
 
 const isCli =
   process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 
 if (isCli) {
-  const { openDb } = await import("./db.js");
-  const db = await openDb();
+  const { openBackend } = await import("./backend.js");
+  const api = await openBackend();
   try {
-    const result = await jevGlobeTick(db);
+    const result = await jevGlobeTick(api);
     console.log("[jev-globe]", result);
   } finally {
-    await db.close();
+    await api.close();
   }
 }

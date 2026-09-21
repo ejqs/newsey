@@ -8,7 +8,7 @@ This repo is **rose-bot**. Globe **Jev** (country + sentiment) runs after each s
 - [rose-web-admin](https://github.com/ejqs/rose-web-admin) — bot configuration (control plane)
 
 ```bash
-# Requires DATABASE_URL (Postgres). No SQLite.
+# Requires ROSE_BACKEND_URL + ROSE_BOT_TOKEN. No DATABASE_URL on this process.
 npm start   # PORT (default 43123). GET /health  GET /articles  GET /globe
 npm test    # Jev globe gates + color aggregation
 ```

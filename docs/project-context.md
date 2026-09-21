@@ -50,24 +50,24 @@ Rose scrapes news **over the long term** (paced, robots-respecting), uses **Jev*
 | Decision model | TypeSafe **Jev** (globe country + sentiment now; full taxonomy later) |
 | Opinionated | Fixed Jev taxonomy, not ad-hoc LLM labels |
 | Primary loop (now) | Paced RSS scrape → store article text → Jev country/sentiment → public globe |
-| **v0 database** | Railway **Postgres** only (`DATABASE_URL` required). Tables: **`news_sources`**, **`articles`**, **`url_ledger`**, **`jev_analyses`**, **`article_geo_sentiment`**. No SQLite. |
+| **v0 database** | Railway **Postgres**, owned by **rose-backend**. Tables: **`news_sources`**, **`articles`**, **`url_ledger`**, **`jev_analyses`**, **`article_geo_sentiment`**, auth, `api_keys`. No SQLite. No Drizzle. |
 | Crawl policy | Long-term completeness; **not** all-at-once |
 | robots.txt | **Always respected**; blocked paths never scraped |
 | Query model | Later: LLM plans queries over the structured DB |
-| Apps | **rose-bot** (this repo) scrapes; **rose-web-admin** configures sources; **rose-web-public** lists articles. No rose-service. |
+| Apps | **rose-backend** owns schema + REST. **rose-bot** (this repo) scrapes via HTTP. **rose-web-admin** configures sources. **rose-web-public** lists articles + globe. |
 | Build now? | **Yes** — bot + two Next.js apps |
 
 Schema, statuses, and cron batching: [`jev-ai-fanout.md`](./jev-ai-fanout.md). Runtime: [`hosting.md`](./hosting.md). App split: [`web.md`](./web.md).
 
 ## rose-bot (this repo)
 
-`npm start` → `node server.js`. Binds `process.env.PORT` (default `43123`). Node **22+**. **Requires `DATABASE_URL` (Postgres).**
+`npm start` → `node server.js`. Binds `process.env.PORT` (default `43123`). Node **22+**. **Requires `ROSE_BACKEND_URL` and `ROSE_BOT_TOKEN`.**
 
 | Path | What |
 | --- | --- |
-| `GET /health` | 200 `{ ok: true, service: "rose-bot", engine: "postgres", lastTick, articles, sources }` |
+| `GET /health` | 200 `{ ok: true, service: "rose-bot", engine: "rose-backend", lastTick, articles, sources }` |
 | `GET /articles` | Recently stored articles (title, url, timestamps; no full body) |
-| `GET /sources` | Token-gated (`ROSE_SERVICE_TOKEN`). Ops fields belong in rose-web-admin. |
+| `GET /sources` | Token-gated (`ROSE_BOT_TOKEN`). Ops fields belong in rose-web-admin. |
 
 ### Pace
 
@@ -91,7 +91,7 @@ English RSS only:
 
 User-Agent: `RoseBot/0.1 (+https://github.com/ejqs/newsey)`.
 
-Local and production use Railway **Postgres** via `DATABASE_URL`. The bot exits if it is missing.
+Local and production call **rose-backend** via `ROSE_BACKEND_URL`. The bot exits if it is missing.
 
 Source config after first seed: **rose-web-admin**. Public list: **rose-web-public**. Map: [`web.md`](./web.md).
 
@@ -108,8 +108,9 @@ Source config after first seed: **rose-web-admin**. Public list: **rose-web-publ
 | **Workspace** | ejqs (`f43c0117-46cb-439c-a5e3-0b21b8c8a0ef`) |
 | **`TYPESAFE_API_KEY`** | Variable **exists** on rose. Required for live globe Jev. Empty → `fixtures/jev-mock/globe-*.json`. Paste from [console.typesafe.ai/keys](https://console.typesafe.ai/keys). |
 | **`RAILPACK_NODE_VERSION`** | Set to `22` (matches `.node-version`). |
-| **`DATABASE_URL`** | `${{Postgres.DATABASE_URL}}` on rose (bot), rose-web-public, and rose-web-admin |
-| **Postgres** | [Postgres](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463/service/b3591f7b-2384-4576-ab2b-5ab81b37f99a?environmentId=4d6055df-ab41-4850-b0bd-06031800b11d) (`b3591f7b-2384-4576-ab2b-5ab81b37f99a`) |
+| **`ROSE_BACKEND_URL`** | Public URL of rose-backend |
+| **`ROSE_BOT_TOKEN`** | Same secret as rose-backend |
+| **Postgres** | [Postgres](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463/service/b3591f7b-2384-4576-ab2b-5ab81b37f99a?environmentId=4d6055df-ab41-4850-b0bd-06031800b11d) (`b3591f7b-2384-4576-ab2b-5ab81b37f99a`) — `DATABASE_URL` only on rose-backend |
 | **Public URL** | https://rose-production-ac15.up.railway.app |
 | **Latest deploy** | **SUCCESS** `714c88e4` (commit `6449d05`) |
 

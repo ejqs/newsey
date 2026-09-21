@@ -1,4 +1,4 @@
-import { openDb } from "../db.js";
+import { openBackend } from "../backend.js";
 import { jevGlobeTick } from "../jev-globe.js";
 
 const now = () => new Date().toISOString();
@@ -37,56 +37,38 @@ const SAMPLES = [
 ];
 
 async function main() {
-  const db = await openDb();
+  const api = await openBackend();
   const t = now();
-  let source = await db.get("SELECT id FROM news_sources ORDER BY id LIMIT 1");
+  let sources = await api.listSources();
+  let source = sources[0];
   if (!source) {
-    await db.run(
-      `INSERT INTO news_sources (
-        name, base_url, feed_url, scrape_method, status, priority,
-        next_eligible_at, articles_scraped_count, created_at, updated_at
-      ) VALUES (?, ?, ?, 'rss', 'paused', 0, ?, 0, ?, ?)`,
-      "Rose sample",
-      "https://example.invalid",
-      null,
-      t,
-      t,
-      t,
-    );
-    source = await db.get("SELECT id FROM news_sources ORDER BY id LIMIT 1");
+    source = await api.createSource({
+      name: "Rose sample",
+      base_url: "https://example.invalid",
+      feed_url: "https://example.invalid/rss.xml",
+      scrape_method: "rss",
+      status: "paused",
+      priority: 0,
+    });
   }
   for (const sample of SAMPLES) {
-    const existing = await db.get("SELECT id FROM articles WHERE url = ?", sample.url);
-    if (existing) continue;
-    await db.run(
-      `INSERT INTO articles (
-        source_id, url, title, body_text, published_at, scraped_at, content_hash,
-        lang, raw_metadata, jev_status, created_at, updated_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      source.id,
-      sample.url,
-      sample.title,
-      sample.body,
-      t,
-      t,
-      `sample:${sample.url}`,
-      "en",
-      JSON.stringify({ sample: true }),
-      "pending",
-      t,
-      t,
-    );
+    await api.insertArticle({
+      source_id: source.id,
+      url: sample.url,
+      title: sample.title,
+      body_text: sample.body,
+      published_at: t,
+      scraped_at: t,
+      content_hash: `sample:${sample.url}`,
+      lang: "en",
+      raw_metadata: JSON.stringify({ sample: true }),
+      jev_status: "pending",
+    });
   }
-  const result = await jevGlobeTick(db, { limit: 50 });
-  const countries = await db.all(
-    `SELECT country_iso, sentiment, eligible, title
-     FROM article_geo_sentiment g
-     JOIN articles a ON a.id = g.article_id
-     WHERE a.url LIKE 'https://example.invalid/rose-sample/%'
-     ORDER BY a.id`,
-  );
+  const result = await jevGlobeTick(api, { limit: 50 });
+  const countries = await api.globe();
   console.log(JSON.stringify({ seed: result, countries }, null, 2));
-  await db.close();
+  await api.close();
 }
 
 main().catch((err) => {

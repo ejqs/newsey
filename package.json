@@ -2,7 +2,7 @@
   "name": "newsey",
   "private": true,
   "type": "module",
-  "description": "rose-bot — paced, robots-respecting news ingest (Postgres only)",
+  "description": "rose-bot — paced, robots-respecting news ingest (HTTP client of rose-backend)",
   "engines": {
     "node": ">=22"
   },
@@ -12,8 +12,5 @@
     "jev-once": "node jev-globe.js",
     "seed-globe-sample": "node scripts/seed-globe-sample.js",
     "test": "node --test jev-globe.test.js"
-  },
-  "dependencies": {
-    "pg": "^8.23.0"
   }
 }

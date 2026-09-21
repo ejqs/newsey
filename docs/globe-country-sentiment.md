@@ -56,7 +56,7 @@ Per country, over eligible rows:
 
 `article_geo_sentiment` — one row per article: `country_iso`, `sentiment`, `confidence`, `eligible`.
 
-`CREATE TABLE IF NOT EXISTS` on boot. No change to `news_sources` / `url_ledger` / article scrape columns.
+Tables live on **rose-backend**. Bot writes through REST (`PUT /v1/bot/jev-analyses`, `PUT /v1/bot/article-geo-sentiment`). No DDL on boot.
 
 ## Ops
 
@@ -68,4 +68,4 @@ Per country, over eligible rows:
 | `npm run seed-globe-sample` | Insert six `example.invalid` articles and run the mock path (local/dev only) |
 | `npm test` | Question shape, fixtures, gates, colors |
 
-Local Postgres: `ssl` is off when `DATABASE_URL` is localhost (Railway still uses TLS).
+Public globe: `GET` rose-backend `/v1/globe`. This process still exposes `GET /globe` as a proxy.
