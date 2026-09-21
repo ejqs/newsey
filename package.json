@@ -8,7 +8,10 @@
   },
   "scripts": {
     "start": "node server.js",
-    "scrape-once": "node server.js --once"
+    "scrape-once": "node server.js --once",
+    "jev-once": "node jev-globe.js",
+    "seed-globe-sample": "node scripts/seed-globe-sample.js",
+    "test": "node --test jev-globe.test.js"
   },
   "dependencies": {
     "pg": "^8.23.0"

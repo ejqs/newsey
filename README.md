@@ -2,14 +2,15 @@
 
 **Rose** is a Recursive Opinionated Search Engine: paced, robots-respecting news ingest, then **Jev** (TypeSafe System One) turns articles into structured records.
 
-This repo is **rose-bot**. **Jev is later.** Two other repos:
+This repo is **rose-bot**. Globe **Jev** (country + sentiment) runs after each scrape tick. Two other repos:
 
-- [rose-web-public](https://github.com/ejqs/rose-web-public) — plain public article list
+- [rose-web-public](https://github.com/ejqs/rose-web-public) — globe + article list
 - [rose-web-admin](https://github.com/ejqs/rose-web-admin) — bot configuration (control plane)
 
 ```bash
 # Requires DATABASE_URL (Postgres). No SQLite.
-npm start   # PORT (default 43123). GET /health  GET /articles
+npm start   # PORT (default 43123). GET /health  GET /articles  GET /globe
+npm test    # Jev globe gates + color aggregation
 ```
 
 Requires **Node 22+**.
@@ -32,7 +33,9 @@ Details: [docs/jev-skill.md](docs/jev-skill.md).
 
 Jev calls need **`TYPESAFE_API_KEY`** from [TypeSafe console keys](https://console.typesafe.ai/keys). Copy `.env.example` to `.env` and set it.
 
-Without a key, use [`fixtures/jev-mock/`](fixtures/jev-mock/) — do not call the hosted API. The scrape bot does not use this key.
+Without a key, use [`fixtures/jev-mock/`](fixtures/jev-mock/) — do not call the hosted API. Globe country+sentiment uses `globe-*.json` on that path.
+
+Country + sentiment pipeline: [docs/globe-country-sentiment.md](docs/globe-country-sentiment.md).
 
 ## Docs
 

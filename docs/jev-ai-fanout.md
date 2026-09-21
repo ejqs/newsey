@@ -2,7 +2,7 @@
 
 **Product:** [Rose](./project-context.md) — Recursive Opinionated Search Engine  
 **Audience:** Earlan  
-**Status:** Mini scrape is live on Railway **rose**. Production DB is **Postgres**. **Jev later**.  
+**Status:** Mini scrape is live on Railway **rose**. Production DB is **Postgres**. **Globe Jev** (country + sentiment) is additive; the rest of the opinionated taxonomy is still later.  
 **Updated:** 2026-09-20
 
 ## Product loop
@@ -101,6 +101,19 @@ Structured Jev judgments. One row per **(subject, taxonomy_version, model)** ana
 
 Later entity-profile tables can aggregate from `jev_analyses`; v0 can derive profiles with queries/views.
 
+### 4. `article_geo_sentiment`
+
+Denormalized globe row, one per article. Written by the additive Jev country+sentiment pass ([`globe-country-sentiment.md`](./globe-country-sentiment.md)). Not used by the scraper.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `article_id` | PK → `articles` | |
+| `country_iso` | text null | ISO 3166-1 alpha-2 when eligible |
+| `sentiment` | text | `positive` · `negative` · `mixed` · `none` |
+| `eligible` | int | `1` = plot on the globe |
+| `confidence` / `about_country` | float | From Jev |
+| `taxonomy_version` / `model` / `analyzed_at` | text | |
+
 ---
 
 ## Crawl policy: slow completeness
@@ -119,7 +132,7 @@ Later entity-profile tables can aggregate from `jev_analyses`; v0 can derive pro
 5. Per source: discover a few new article URLs (feed items or list page), skip URLs already in `articles`, fetch only up to remaining budget.  
 6. On success: insert `articles`, bump `last_success_at`, set `status=ok`, schedule `next_eligible_at = now() + max(crawl_delay, source_spacing)`.  
 7. On failure: update `status` (`blocked` / `broken`), store `last_error`, exponential-ish backoff on `next_eligible_at`.  
-8. Jev pass: pick `articles` with `jev_status=pending` (may be from earlier days — analysis can lag scrape). Write `jev_analyses`, set `jev_status=done`.
+8. Jev globe pass: pick `articles` with no `article_geo_sentiment` row (analysis can lag scrape). Write `jev_analyses` + `article_geo_sentiment`, set `jev_status=done`. See [`globe-country-sentiment.md`](./globe-country-sentiment.md).
 
 **Long-term completeness** = many small runs + fairness rotation across `news_sources`, not one giant crawl. New sources start `unknown` and trickle in.
 

@@ -1,0 +1,50 @@
+{
+  "model": "jev-latest",
+  "answers": {
+    "about_primary_country": {
+      "type": "noul",
+      "noul": 0.18
+    },
+    "region": {
+      "type": "choice",
+      "choice": "none",
+      "probabilities": {
+        "africa": 0.08,
+        "americas": 0.12,
+        "asia": 0.14,
+        "europe": 0.11,
+        "oceania": 0.04,
+        "none": 0.51
+      },
+      "confidence": 0.41
+    },
+    "primary_country": {
+      "type": "choice",
+      "choice": "none",
+      "probabilities": {
+        "none": 0.72,
+        "US": 0.1,
+        "CN": 0.1,
+        "IN": 0.08
+      },
+      "confidence": 0.62
+    },
+    "country_sentiment": {
+      "type": "choice",
+      "choice": "not_applicable",
+      "probabilities": {
+        "positive": 0.08,
+        "negative": 0.08,
+        "mixed": 0.14,
+        "not_applicable": 0.7
+      },
+      "confidence": 0.6
+    }
+  },
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  },
+  "_mock": true,
+  "_note": "Canned System One shape for globe country+sentiment when TYPESAFE_API_KEY is unset."
+}
