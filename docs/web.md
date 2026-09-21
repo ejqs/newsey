@@ -7,11 +7,11 @@ Three GitHub repos, one Postgres. **No rose-service.**
 | App | Repo | Job |
 | --- | --- | --- |
 | **rose-bot** | [ejqs/newsey](https://github.com/ejqs/newsey) (this repo) | Paced RSS scrape. Reads `news_sources`, writes `articles`. |
-| **rose-web-public** | [ejqs/rose-web-public](https://github.com/ejqs/rose-web-public) | Plain public list. Excerpt + link to original. Search later. Live: https://rose-web-public-production.up.railway.app |
+| **rose-web-public** | [ejqs/rose-web-public](https://github.com/ejqs/rose-web-public) | Public globe (country sentiment) plus article list. Excerpt + link to original. Search later. Live: https://rose-web-public-production.up.railway.app |
 | **rose-web-admin** | [ejqs/rose-web-admin](https://github.com/ejqs/rose-web-admin) | Control plane. Bot config (add / edit / pause sources). Later: opinions / Jev. Live: https://rose-web-admin-production.up.railway.app |
 
 ```
-visitor  →  rose-web-public  →  Postgres (read articles)
+visitor  →  rose-web-public  →  Postgres (read article_geo_sentiment + articles)
 operator →  rose-web-admin   →  Postgres (auth + write news_sources)
 rose-bot →  Postgres (read config, write articles)
 ```

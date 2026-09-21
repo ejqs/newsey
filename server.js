@@ -1,6 +1,7 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import { openDb } from "./db.js";
+import { jevGlobeTick, listGlobeCountries } from "./jev-globe.js";
 
 const PORT = Number(process.env.PORT) || 43123;
 const UA = "RoseBot/0.1 (+https://github.com/ejqs/newsey)";
@@ -395,7 +396,9 @@ async function runTick() {
   if (ticking) return lastTick;
   ticking = true;
   try {
-    lastTick = await scrapeTick();
+    const scrape = await scrapeTick();
+    const jev = await jevGlobeTick(db);
+    lastTick = { ...scrape, jev };
   } finally {
     ticking = false;
   }
@@ -426,6 +429,7 @@ async function handle(req, res) {
       lastTick,
       articles: countN(await db.get("SELECT COUNT(*) AS n FROM articles")),
       sources: countN(await db.get("SELECT COUNT(*) AS n FROM news_sources")),
+      globe: countN(await db.get("SELECT COUNT(*) AS n FROM article_geo_sentiment WHERE eligible = 1")),
     });
     return;
   }
@@ -437,6 +441,14 @@ async function handle(req, res) {
       return;
     }
     json(res, 200, { ok: true, sources: await db.all("SELECT * FROM news_sources ORDER BY priority DESC") });
+    return;
+  }
+  if (url.pathname === "/globe") {
+    json(res, 200, {
+      ok: true,
+      taxonomy_version: "rose-globe-2026-09-21",
+      countries: await listGlobeCountries(db),
+    });
     return;
   }
   if (url.pathname === "/articles") {

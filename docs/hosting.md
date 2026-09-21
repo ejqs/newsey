@@ -22,15 +22,16 @@ App map: [`web.md`](./web.md).
 
 | Path | What |
 | --- | --- |
-| `GET /health` | 200 `{ ok, service: "rose-bot", engine: "postgres", lastTick, articles, sources }` |
+| `GET /health` | 200 `{ ok, service: "rose-bot", engine: "postgres", lastTick, articles, sources, globe }` |
 | `GET /articles` | Recently stored articles (no body) |
+| `GET /globe` | Aggregated country tones for the public globe |
 | `GET /sources` | 401 unless `ROSE_SERVICE_TOKEN` matches |
 
 Each tick (default **15 minutes**): pick **1** eligible source (`status` in `ok`/`unknown`, `next_eligible_at`, rotate by priority / least-recent success), fetch RSS, record every item URL in `url_ledger` (never fetch a URL twice), honor `robots.txt`, fetch at most **3** new articles, wait ≥2s (or Crawl-delay) between requests, then set that source’s `next_eligible_at` **6 hours** later. `paused` is never picked.
 
 English-only first-run seeds (only if `news_sources` is empty): BBC World, NPR News, The Guardian World, Al Jazeera English. After that, **rose-web-admin** owns source config.
 
-Jev is **not** in this slice (`jev_status=skipped`). No `TYPESAFE_API_KEY` required.
+Jev globe pass runs after each scrape tick (`jev-globe.js`). Live calls need `TYPESAFE_API_KEY`. Without it, mock fixtures. Details: [`globe-country-sentiment.md`](./globe-country-sentiment.md).
 
 Local one-shot: `npm run scrape-once` (still needs `DATABASE_URL`).
 
@@ -45,7 +46,7 @@ Workspace **ejqs**. Project **newsey**. Shared **Postgres**.
 | **rose-bot public URL** | https://rose-production-ac15.up.railway.app |
 | `GET /health` | https://rose-production-ac15.up.railway.app/health |
 | `RAILPACK_NODE_VERSION` | `22` |
-| `TYPESAFE_API_KEY` | empty until Jev |
+| `TYPESAFE_API_KEY` | live Jev for globe; empty uses mock fixtures |
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` on rose, rose-web-public, and rose-web-admin |
 | **Postgres** | [service](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463/service/b3591f7b-2384-4576-ab2b-5ab81b37f99a?environmentId=4d6055df-ab41-4850-b0bd-06031800b11d) (`b3591f7b-2384-4576-ab2b-5ab81b37f99a`) |
 

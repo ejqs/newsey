@@ -52,13 +52,14 @@ Do not commit `.env`. Keep keys server-side; never log them.
 
 ## Local / mock fallback
 
-Until the key is set, agents and tests should treat [`fixtures/jev-mock/article-analysis.json`](../fixtures/jev-mock/article-analysis.json) as a canned System One response for a single article (Choice / Score / Noul shapes from the [HTTP API](https://docs.typesafe.ai/api.md)).
+Until the key is set, agents and tests should treat [`fixtures/jev-mock/article-analysis.json`](../fixtures/jev-mock/article-analysis.json) as a canned System One response for a single article (Choice / Score / Noul shapes from the [HTTP API](https://docs.typesafe.ai/api.md)). Globe questions use [`fixtures/jev-mock/globe-ukraine-negative.json`](../fixtures/jev-mock/globe-ukraine-negative.json) and sibling `globe-*.json` files.
 
 Rules when the key is missing:
 
 - Do **not** call `api.typesafe.ai`.
 - Do **not** invent extra request or response fields.
 - Map mock `answers` into `jev_analyses.answers` the same way a live response would be mapped.
+- Globe country+sentiment mocks: `fixtures/jev-mock/globe-*.json` (see [`globe-country-sentiment.md`](./globe-country-sentiment.md)).
 
 ## What was skipped (not official TypeSafe)
 
