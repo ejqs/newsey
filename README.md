@@ -2,13 +2,13 @@
 
 **Rose** is a Recursive Opinionated Search Engine: paced, robots-respecting news ingest, then **Jev** (TypeSafe System One) turns articles into structured records.
 
-This repo is **Rose**: paced, robots-respecting RSS ingest into SQLite. **Jev is later.**
+This repo is **Rose**: paced, robots-respecting RSS ingest. **Jev is later.**
 
 ```bash
 npm start   # PORT (default 43123). GET /health  GET /sources  GET /articles
 ```
 
-Requires **Node 22+**. Tick every 15 minutes: one source, at most three new article URLs, six-hour gap per source. Every RSS URL is stored in `url_ledger` so it is never fetched twice. Seeds are English-language outlets only.
+Requires **Node 22+**. Production uses Railway **Postgres** (`DATABASE_URL`). Local `npm start` uses SQLite unless `DATABASE_URL` is set.
 
 ## Jev skill (installed)
 
@@ -34,7 +34,7 @@ Without a key, use [`fixtures/jev-mock/`](fixtures/jev-mock/) — do not call th
 
 Index: [docs/README.md](docs/README.md). Hosting: [docs/hosting.md](docs/hosting.md). Product: [docs/project-context.md](docs/project-context.md).
 
-GitHub: [ejqs/newsey](https://github.com/ejqs/newsey). Railway **rose**: [dashboard](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463).
+GitHub: [ejqs/newsey](https://github.com/ejqs/newsey). Live: [rose-production-ac15.up.railway.app](https://rose-production-ac15.up.railway.app). Railway **rose**: [dashboard](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463).
 
 ## Refresh the skill
 

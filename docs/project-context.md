@@ -2,10 +2,11 @@
 
 **Product:** **Rose** — Recursive Opinionated Search Engine  
 **Owner:** Earlan  
-**Status:** Mini scrape service is in this repo (`server.js`). **Jev later** — no Jev calls, no invented `TYPESAFE_API_KEY`. GitHub source of truth: [`ejqs/newsey`](https://github.com/ejqs/newsey). Railway **rose** deploys from `main`.  
-**Updated:** 2026-09-20  
-**Canonical repo:** https://github.com/ejqs/newsey  
-**PR (skill/docs):** https://github.com/ejqs/newsey/pull/1 (merged as `777c609`)
+**Status:** Mini scrape is live on Railway **rose** (**SUCCESS**). **Jev later** — no Jev calls, no invented `TYPESAFE_API_KEY`. GitHub source of truth: [`ejqs/newsey`](https://github.com/ejqs/newsey).  
+**Updated:** 2026-09-21  
+**Canonical repo:** https://github.com/ejqs/newsey (`main` `6449d05`)  
+**Live:** https://rose-production-ac15.up.railway.app  
+**PRs:** [#1](https://github.com/ejqs/newsey/pull/1) hosting docs, [#2](https://github.com/ejqs/newsey/pull/2) scrape service — both merged.
 
 ## One-line definition
 
@@ -49,7 +50,7 @@ Rose scrapes news **over the long term** (paced, robots-respecting), uses **Jev*
 | Decision model | TypeSafe **Jev** (later) |
 | Opinionated | Fixed Jev taxonomy, not ad-hoc LLM labels |
 | Primary loop (now) | Paced RSS scrape → store article text → skip Jev |
-| **v0 database** | SQLite: **`news_sources`**, **`articles`**, **`url_ledger`**. `jev_analyses` is later. |
+| **v0 database** | Railway **Postgres** in production; SQLite locally. Tables: **`news_sources`**, **`articles`**, **`url_ledger`**. `jev_analyses` is later. |
 | Crawl policy | Long-term completeness; **not** all-at-once |
 | robots.txt | **Always respected**; blocked paths never scraped |
 | Query model | Later: LLM plans queries over the structured DB |
@@ -59,7 +60,7 @@ Schema, statuses, and cron batching: [`jev-ai-fanout.md`](./jev-ai-fanout.md). R
 
 ## Mini scrape service
 
-`npm start` → `node server.js`. Binds `process.env.PORT` (default `43123`). Node **22+** (`node:sqlite`, zero npm dependencies).
+`npm start` → `node server.js`. Binds `process.env.PORT` (default `43123`). Node **22+**. Postgres when `DATABASE_URL` is set; SQLite otherwise.
 
 | Path | What |
 | --- | --- |
@@ -89,7 +90,7 @@ English RSS only:
 
 User-Agent: `RoseBot/0.1 (+https://github.com/ejqs/newsey)`.
 
-SQLite file: `$DATA_DIR/rose.sqlite` (`DATA_DIR`, else `/data` if that directory exists, else `./data`).
+SQLite locally: `$DATA_DIR/rose.sqlite` (`DATA_DIR`, else `/data` if that directory exists, else `./data`). Production: Railway **Postgres** via `DATABASE_URL`.
 
 ## Hosting (Railway)
 
@@ -104,8 +105,10 @@ SQLite file: `$DATA_DIR/rose.sqlite` (`DATA_DIR`, else `/data` if that directory
 | **Workspace** | ejqs (`f43c0117-46cb-439c-a5e3-0b21b8c8a0ef`) |
 | **`TYPESAFE_API_KEY`** | Variable **exists** on rose, value **empty**. Leave empty until Jev. Paste from [console.typesafe.ai/keys](https://console.typesafe.ai/keys). |
 | **`RAILPACK_NODE_VERSION`** | Set to `22` (matches `.node-version`). |
-
-Railway SUCCESS is claimed only when scrape code is on `main` and a deploy is actually SUCCESS.
+| **`DATABASE_URL`** | `${{Postgres.DATABASE_URL}}` on rose (private). |
+| **Postgres** | [Postgres](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463/service/b3591f7b-2384-4576-ab2b-5ab81b37f99a?environmentId=4d6055df-ab41-4850-b0bd-06031800b11d) (`b3591f7b-2384-4576-ab2b-5ab81b37f99a`) |
+| **Public URL** | https://rose-production-ac15.up.railway.app |
+| **Latest deploy** | **SUCCESS** `714c88e4` (commit `6449d05`) |
 
 ## Jev agent skill (installed)
 
@@ -121,8 +124,7 @@ Official TypeSafe skill pack **`typesafe-ai`** from [typesafe-ai/skills](https:/
 ## Open choices
 
 1. **Taxonomy** — ship starter enums as-is, or edit before Jev is wired?
-2. **Persistent volume** on Railway `/data` so SQLite survives redeploys.
-3. **LLM source-discovery** — later; seeds stay hand-picked until then.
+2. **LLM source-discovery** — later; seeds stay hand-picked until then.
 
 ## Doc map
 

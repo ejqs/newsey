@@ -1,12 +1,9 @@
 import http from "node:http";
-import fs from "node:fs";
-import path from "node:path";
 import crypto from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import { openDb } from "./db.js";
 
 const PORT = Number(process.env.PORT) || 43123;
 const UA = "RoseBot/0.1 (+https://github.com/ejqs/newsey)";
-const DATA_DIR = process.env.DATA_DIR || (fs.existsSync("/data") ? "/data" : "./data");
 const TICK_MS = Number(process.env.TICK_MS) || 15 * 60 * 1000;
 const MAX_SOURCES = Number(process.env.MAX_SOURCES_PER_TICK) || 1;
 const MAX_FETCHES = Number(process.env.MAX_FETCHES_PER_TICK) || 3;
@@ -43,76 +40,34 @@ const SEEDS = [
   },
 ];
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new DatabaseSync(path.join(DATA_DIR, "rose.sqlite"));
-db.exec("PRAGMA journal_mode = WAL;");
-db.exec("PRAGMA foreign_keys = ON;");
-db.exec(`
-CREATE TABLE IF NOT EXISTS news_sources (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  base_url TEXT NOT NULL,
-  feed_url TEXT,
-  scrape_method TEXT NOT NULL DEFAULT 'rss',
-  status TEXT NOT NULL DEFAULT 'unknown',
-  robots_checked_at TEXT,
-  robots_ttl_until TEXT,
-  robots_body TEXT,
-  crawl_delay_seconds INTEGER,
-  last_success_at TEXT,
-  last_attempt_at TEXT,
-  last_error TEXT,
-  priority INTEGER NOT NULL DEFAULT 0,
-  next_eligible_at TEXT NOT NULL,
-  articles_scraped_count INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS url_ledger (
-  url TEXT PRIMARY KEY,
-  source_id INTEGER NOT NULL,
-  first_seen_at TEXT NOT NULL,
-  last_seen_at TEXT NOT NULL,
-  outcome TEXT NOT NULL,
-  note TEXT,
-  FOREIGN KEY (source_id) REFERENCES news_sources(id)
-);
-CREATE TABLE IF NOT EXISTS articles (
-  id INTEGER PRIMARY KEY,
-  source_id INTEGER NOT NULL,
-  url TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  body_text TEXT NOT NULL,
-  published_at TEXT,
-  scraped_at TEXT NOT NULL,
-  content_hash TEXT NOT NULL,
-  lang TEXT,
-  raw_metadata TEXT,
-  jev_status TEXT NOT NULL DEFAULT 'skipped',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY (source_id) REFERENCES news_sources(id)
-);
-`);
-
 const nowIso = () => new Date().toISOString();
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+const countN = (row) => Number(row?.n ?? 0);
 
-function seedSources() {
-  const insert = db.prepare(`
-    INSERT INTO news_sources (
-      name, base_url, feed_url, scrape_method, status, priority,
-      next_eligible_at, articles_scraped_count, created_at, updated_at
-    ) VALUES (?, ?, ?, 'rss', 'unknown', ?, ?, 0, ?, ?)
-  `);
-  const exists = db.prepare("SELECT id FROM news_sources WHERE feed_url = ?");
+let db;
+
+async function seedSources() {
   const t = nowIso();
   for (const s of SEEDS) {
-    if (!exists.get(s.feed_url)) {
-      insert.run(s.name, s.base_url, s.feed_url, s.priority, t, t, t);
-    }
+    const exists = await db.get("SELECT id FROM news_sources WHERE feed_url = ?", s.feed_url);
+    if (exists) continue;
+    await db.run(
+      `INSERT INTO news_sources (
+        name, base_url, feed_url, scrape_method, status, priority,
+        next_eligible_at, articles_scraped_count, created_at, updated_at
+      ) VALUES (?, ?, ?, 'rss', 'unknown', ?, ?, 0, ?, ?)`,
+      s.name,
+      s.base_url,
+      s.feed_url,
+      s.priority,
+      t,
+      t,
+      t,
+    );
   }
 }
-seedSources();
 
 async function httpGet(url) {
   const ctrl = new AbortController();
@@ -128,10 +83,6 @@ async function httpGet(url) {
   } finally {
     clearTimeout(timer);
   }
-}
-
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 function parseRobots(body) {
@@ -182,20 +133,32 @@ async function refreshRobots(source) {
     const t = nowIso();
     const ttlUntil = new Date(Date.now() + ROBOTS_TTL_HOURS * 3600_000).toISOString();
     if (res.status >= 400) {
-      db.prepare(
+      await db.run(
         `UPDATE news_sources SET robots_checked_at=?, robots_ttl_until=?, robots_body=?, updated_at=? WHERE id=?`,
-      ).run(t, ttlUntil, "", t, source.id);
+        t,
+        ttlUntil,
+        "",
+        t,
+        source.id,
+      );
       return { ...source, robots_body: "", robots_ttl_until: ttlUntil };
     }
     const groups = parseRobots(res.text);
     const delay = groups.find((g) => g.crawlDelay != null)?.crawlDelay ?? null;
-    db.prepare(
+    await db.run(
       `UPDATE news_sources SET robots_checked_at=?, robots_ttl_until=?, robots_body=?, crawl_delay_seconds=?, updated_at=? WHERE id=?`,
-    ).run(t, ttlUntil, res.text, delay, t, source.id);
+      t,
+      ttlUntil,
+      res.text,
+      delay,
+      t,
+      source.id,
+    );
     return { ...source, robots_body: res.text, robots_ttl_until: ttlUntil, crawl_delay_seconds: delay };
   } catch (err) {
     const t = nowIso();
-    db.prepare(`UPDATE news_sources SET last_error=?, updated_at=? WHERE id=?`).run(
+    await db.run(
+      `UPDATE news_sources SET last_error=?, updated_at=? WHERE id=?`,
       `robots: ${err.message}`.slice(0, 400),
       t,
       source.id,
@@ -257,14 +220,15 @@ function htmlToText(html) {
     .trim();
 }
 
-function rememberUrl(sourceId, url, outcome, note) {
+async function rememberUrl(sourceId, url, outcome, note) {
   const t = nowIso();
-  const row = db.prepare("SELECT url FROM url_ledger WHERE url = ?").get(url);
+  const row = await db.get("SELECT url FROM url_ledger WHERE url = ?", url);
   if (row) {
     if (outcome === "seen") {
-      db.prepare(`UPDATE url_ledger SET last_seen_at=? WHERE url=?`).run(t, url);
+      await db.run(`UPDATE url_ledger SET last_seen_at=? WHERE url=?`, t, url);
     } else {
-      db.prepare(`UPDATE url_ledger SET last_seen_at=?, outcome=?, note=? WHERE url=?`).run(
+      await db.run(
+        `UPDATE url_ledger SET last_seen_at=?, outcome=?, note=? WHERE url=?`,
         t,
         outcome,
         note ?? null,
@@ -273,37 +237,45 @@ function rememberUrl(sourceId, url, outcome, note) {
     }
     return false;
   }
-  db.prepare(
+  await db.run(
     `INSERT INTO url_ledger (url, source_id, first_seen_at, last_seen_at, outcome, note) VALUES (?,?,?,?,?,?)`,
-  ).run(url, sourceId, t, t, outcome, note ?? null);
+    url,
+    sourceId,
+    t,
+    t,
+    outcome,
+    note ?? null,
+  );
   return true;
 }
 
-function markSource(source, patch) {
+async function markSource(source, patch) {
   const t = nowIso();
   const fields = { ...patch, updated_at: t };
   const keys = Object.keys(fields);
-  db.prepare(
+  await db.run(
     `UPDATE news_sources SET ${keys.map((k) => `${k}=?`).join(", ")} WHERE id=?`,
-  ).run(...keys.map((k) => fields[k]), source.id);
+    ...keys.map((k) => fields[k]),
+    source.id,
+  );
 }
 
-function pickSources() {
+async function pickSources() {
   const t = nowIso();
-  return db
-    .prepare(
-      `SELECT * FROM news_sources
-       WHERE status IN ('ok','unknown') AND next_eligible_at <= ?
-       ORDER BY priority DESC, COALESCE(last_success_at, '1970-01-01') ASC
-       LIMIT ?`,
-    )
-    .all(t, MAX_SOURCES);
+  return db.all(
+    `SELECT * FROM news_sources
+     WHERE status IN ('ok','unknown') AND next_eligible_at <= ?
+     ORDER BY priority DESC, COALESCE(last_success_at, '1970-01-01') ASC
+     LIMIT ?`,
+    t,
+    MAX_SOURCES,
+  );
 }
 
 async function scrapeTick() {
   const started = nowIso();
   let fetched = 0;
-  const sources = pickSources();
+  const sources = await pickSources();
   if (!sources.length) {
     console.log(`[tick ${started}] no eligible sources`);
     return { started, fetched: 0, sources: 0 };
@@ -311,10 +283,10 @@ async function scrapeTick() {
   for (const raw of sources) {
     let source = await refreshRobots(raw);
     const t = nowIso();
-    markSource(source, { last_attempt_at: t });
+    await markSource(source, { last_attempt_at: t });
     const feedCheck = pathAllowed(source, source.feed_url);
     if (!feedCheck.allowed) {
-      markSource(source, {
+      await markSource(source, {
         status: "robots_disallow",
         last_error: "robots.txt disallows feed",
         next_eligible_at: new Date(Date.now() + ROBOTS_TTL_HOURS * 3600_000).toISOString(),
@@ -325,7 +297,7 @@ async function scrapeTick() {
     try {
       const feedRes = await httpGet(source.feed_url);
       if (feedRes.status === 401 || feedRes.status === 403 || feedRes.status === 429) {
-        markSource(source, {
+        await markSource(source, {
           status: "blocked",
           last_error: `feed HTTP ${feedRes.status}`,
           next_eligible_at: new Date(Date.now() + SOURCE_GAP_HOURS * 2 * 3600_000).toISOString(),
@@ -333,7 +305,7 @@ async function scrapeTick() {
         continue;
       }
       if (feedRes.status >= 500) {
-        markSource(source, {
+        await markSource(source, {
           status: "broken",
           last_error: `feed HTTP ${feedRes.status}`,
           next_eligible_at: new Date(Date.now() + SOURCE_GAP_HOURS * 3600_000).toISOString(),
@@ -344,20 +316,20 @@ async function scrapeTick() {
       let ok = 0;
       for (const item of items) {
         if (fetched >= MAX_FETCHES) break;
-        const isNew = rememberUrl(source.id, item.url, "seen", "rss");
+        const isNew = await rememberUrl(source.id, item.url, "seen", "rss");
         if (!isNew) continue;
         const allow = pathAllowed(source, item.url);
         if (!allow.allowed) {
-          rememberUrl(source.id, item.url, "robots_disallow", "article path");
+          await rememberUrl(source.id, item.url, "robots_disallow", "article path");
           continue;
         }
         await sleep(delayMs);
         try {
           const page = await httpGet(item.url);
           if (page.status >= 400) {
-            rememberUrl(source.id, item.url, "fetch_error", `HTTP ${page.status}`);
+            await rememberUrl(source.id, item.url, "fetch_error", `HTTP ${page.status}`);
             if (page.status === 401 || page.status === 403 || page.status === 429) {
-              markSource(source, {
+              await markSource(source, {
                 status: "blocked",
                 last_error: `article HTTP ${page.status}`,
                 next_eligible_at: new Date(Date.now() + SOURCE_GAP_HOURS * 2 * 3600_000).toISOString(),
@@ -369,12 +341,11 @@ async function scrapeTick() {
           const body = htmlToText(page.text) || htmlToText(item.desc) || item.title;
           const hash = crypto.createHash("sha256").update(body).digest("hex");
           const ts = nowIso();
-          db.prepare(
+          await db.run(
             `INSERT OR IGNORE INTO articles (
               source_id, url, title, body_text, published_at, scraped_at, content_hash,
               lang, raw_metadata, jev_status, created_at, updated_at
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-          ).run(
             source.id,
             item.url,
             item.title.slice(0, 500),
@@ -388,16 +359,16 @@ async function scrapeTick() {
             ts,
             ts,
           );
-          rememberUrl(source.id, item.url, "fetched", null);
+          await rememberUrl(source.id, item.url, "fetched", null);
           ok += 1;
           fetched += 1;
         } catch (err) {
-          rememberUrl(source.id, item.url, "fetch_error", err.message.slice(0, 200));
+          await rememberUrl(source.id, item.url, "fetch_error", err.message.slice(0, 200));
         }
       }
       const next = new Date(Date.now() + SOURCE_GAP_HOURS * 3600_000).toISOString();
-      const count = db.prepare("SELECT COUNT(*) AS n FROM articles WHERE source_id = ?").get(source.id).n;
-      markSource(source, {
+      const count = countN(await db.get("SELECT COUNT(*) AS n FROM articles WHERE source_id = ?", source.id));
+      await markSource(source, {
         status: "ok",
         last_success_at: nowIso(),
         last_error: null,
@@ -406,7 +377,7 @@ async function scrapeTick() {
       });
       console.log(`[tick] ${source.name}: +${ok} articles, next ${next}`);
     } catch (err) {
-      markSource(source, {
+      await markSource(source, {
         status: "broken",
         last_error: err.message.slice(0, 400),
         next_eligible_at: new Date(Date.now() + SOURCE_GAP_HOURS * 3600_000).toISOString(),
@@ -440,7 +411,7 @@ function json(res, status, body) {
   res.end(payload);
 }
 
-const server = http.createServer((req, res) => {
+async function handle(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   if (req.method !== "GET") {
     json(res, 405, { ok: false, error: "method_not_allowed" });
@@ -451,46 +422,61 @@ const server = http.createServer((req, res) => {
       ok: true,
       service: "rose",
       product: "newsey",
+      engine: db.kind,
       lastTick,
-      articles: db.prepare("SELECT COUNT(*) AS n FROM articles").get().n,
-      sources: db.prepare("SELECT COUNT(*) AS n FROM news_sources").get().n,
+      articles: countN(await db.get("SELECT COUNT(*) AS n FROM articles")),
+      sources: countN(await db.get("SELECT COUNT(*) AS n FROM news_sources")),
     });
     return;
   }
   if (url.pathname === "/sources") {
-    json(res, 200, { ok: true, sources: db.prepare("SELECT * FROM news_sources ORDER BY priority DESC").all() });
+    json(res, 200, { ok: true, sources: await db.all("SELECT * FROM news_sources ORDER BY priority DESC") });
     return;
   }
   if (url.pathname === "/articles") {
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || 20));
     json(res, 200, {
       ok: true,
-      articles: db
-        .prepare(
-          `SELECT a.id, a.url, a.title, a.published_at, a.scraped_at, a.jev_status, s.name AS source
-           FROM articles a JOIN news_sources s ON s.id = a.source_id
-           ORDER BY a.id DESC LIMIT ?`,
-        )
-        .all(limit),
+      articles: await db.all(
+        `SELECT a.id, a.url, a.title, a.published_at, a.scraped_at, a.jev_status, s.name AS source
+         FROM articles a JOIN news_sources s ON s.id = a.source_id
+         ORDER BY a.id DESC LIMIT ?`,
+        limit,
+      ),
     });
     return;
   }
   json(res, 404, { ok: false, error: "not_found" });
-});
+}
 
-server.listen(PORT, "0.0.0.0", async () => {
-  console.log(`rose listening on ${PORT} (sqlite ${path.join(DATA_DIR, "rose.sqlite")})`);
-  try {
-    await runTick();
-  } catch (err) {
-    console.error("initial tick failed", err);
-  }
-  if (ONCE) {
-    server.close();
-    db.close();
-    process.exit(0);
-  }
-  setInterval(() => {
-    runTick().catch((err) => console.error("tick failed", err));
-  }, TICK_MS);
+async function main() {
+  db = await openDb();
+  await seedSources();
+  const server = http.createServer((req, res) => {
+    handle(req, res).catch((err) => {
+      console.error("request failed", err);
+      if (!res.headersSent) json(res, 500, { ok: false, error: "internal" });
+    });
+  });
+  server.listen(PORT, "0.0.0.0", async () => {
+    console.log(`rose listening on ${PORT} (${db.label})`);
+    try {
+      await runTick();
+    } catch (err) {
+      console.error("initial tick failed", err);
+    }
+    if (ONCE) {
+      server.close();
+      await db.close();
+      process.exit(0);
+    }
+    setInterval(() => {
+      runTick().catch((err) => console.error("tick failed", err));
+    }, TICK_MS);
+  });
+}
+
+main().catch((err) => {
+  console.error("boot failed", err);
+  process.exit(1);
 });
