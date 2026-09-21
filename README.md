@@ -2,17 +2,17 @@
 
 **Rose** is a Recursive Opinionated Search Engine: paced, robots-respecting news ingest, then **Jev** (TypeSafe System One) turns articles into structured records.
 
-This repo is **rose-bot**. Globe **Jev** (country + sentiment) runs after each scrape tick. Two other repos:
+This repo is **rose-bot**. **Jev** runs after each scrape tick from enabled `jev_questions` (globe country+sentiment plus hop-in and metadata). Two other repos:
 
 - [rose-web-public](https://github.com/ejqs/rose-web-public) — globe + article list
-- [rose-web-admin](https://github.com/ejqs/rose-web-admin) — bot configuration (control plane)
+- [rose-web-admin](https://github.com/ejqs/rose-web-admin) — bot configuration + Jev questions
 
 ```bash
 # Requires DATABASE_URL (Postgres). No SQLite.
 npm start        # PORT (default 43123). GET /health  GET /articles  GET /globe  GET /crawl  /v1/* (API keys)
 npm run scrape-once
 npm run crawl-once   # one crawl tick; crawler is off by default in npm start
-npm test         # Jev globe gates + api-keys + crawler policy/robots checks
+npm test         # Jev globe + questions + api-keys + crawler policy/robots checks
 ```
 
 Requires **Node 22+**. Crawler on/off and robots rules: [docs/crawler.md](docs/crawler.md).
@@ -35,9 +35,9 @@ Details: [docs/jev-skill.md](docs/jev-skill.md).
 
 Jev calls need **`TYPESAFE_API_KEY`** from [TypeSafe console keys](https://console.typesafe.ai/keys). Copy `.env.example` to `.env` and set it.
 
-Without a key, use [`fixtures/jev-mock/`](fixtures/jev-mock/) — do not call the hosted API. Globe country+sentiment uses `globe-*.json` on that path.
+Without a key, use [`fixtures/jev-mock/`](fixtures/jev-mock/) — do not call the hosted API. Globe country+sentiment uses `globe-*.json`; extra taxonomy uses `taxonomy-extra.json`.
 
-Country + sentiment pipeline: [docs/globe-country-sentiment.md](docs/globe-country-sentiment.md).
+Country + sentiment pipeline: [docs/globe-country-sentiment.md](docs/globe-country-sentiment.md). Add/edit questions: [docs/jev-questions.md](docs/jev-questions.md).
 
 ## Docs
 
