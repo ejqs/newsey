@@ -2,7 +2,7 @@
 
 **Product:** **Rose** — Recursive Opinionated Search Engine  
 **Owner:** Earlan  
-**Status:** Mini scrape is live on Railway **rose** (**SUCCESS**). **Jev later** — no Jev calls, no invented `TYPESAFE_API_KEY`. GitHub source of truth: [`ejqs/newsey`](https://github.com/ejqs/newsey).  
+**Status:** rose-bot is live on Railway **rose**. **rose-web-public** and **rose-web-admin** are separate repos. **Jev later** — no Jev calls, no invented `TYPESAFE_API_KEY`. GitHub: [`ejqs/newsey`](https://github.com/ejqs/newsey) (bot), [`ejqs/rose-web-public`](https://github.com/ejqs/rose-web-public), [`ejqs/rose-web-admin`](https://github.com/ejqs/rose-web-admin).  
 **Updated:** 2026-09-21  
 **Canonical repo:** https://github.com/ejqs/newsey (`main` `6449d05`)  
 **Live:** https://rose-production-ac15.up.railway.app  
@@ -50,23 +50,24 @@ Rose scrapes news **over the long term** (paced, robots-respecting), uses **Jev*
 | Decision model | TypeSafe **Jev** (later) |
 | Opinionated | Fixed Jev taxonomy, not ad-hoc LLM labels |
 | Primary loop (now) | Paced RSS scrape → store article text → skip Jev |
-| **v0 database** | Railway **Postgres** in production; SQLite locally. Tables: **`news_sources`**, **`articles`**, **`url_ledger`**. `jev_analyses` is later. |
+| **v0 database** | Railway **Postgres** only (`DATABASE_URL` required). Tables: **`news_sources`**, **`articles`**, **`url_ledger`**. `jev_analyses` is later. No SQLite. |
 | Crawl policy | Long-term completeness; **not** all-at-once |
 | robots.txt | **Always respected**; blocked paths never scraped |
 | Query model | Later: LLM plans queries over the structured DB |
-| Build now? | **Yes** — mini scrape HTTP service |
+| Apps | **rose-bot** (this repo) scrapes; **rose-web-admin** configures sources; **rose-web-public** lists articles. No rose-service. |
+| Build now? | **Yes** — bot + two Next.js apps |
 
-Schema, statuses, and cron batching: [`jev-ai-fanout.md`](./jev-ai-fanout.md). Runtime: [`hosting.md`](./hosting.md).
+Schema, statuses, and cron batching: [`jev-ai-fanout.md`](./jev-ai-fanout.md). Runtime: [`hosting.md`](./hosting.md). App split: [`web.md`](./web.md).
 
-## Mini scrape service
+## rose-bot (this repo)
 
-`npm start` → `node server.js`. Binds `process.env.PORT` (default `43123`). Node **22+**. Postgres when `DATABASE_URL` is set; SQLite otherwise.
+`npm start` → `node server.js`. Binds `process.env.PORT` (default `43123`). Node **22+**. **Requires `DATABASE_URL` (Postgres).**
 
 | Path | What |
 | --- | --- |
-| `GET /health` | 200 `{ ok: true, service, lastTick, articles, sources }` |
-| `GET /sources` | Seeded RSS sources and scrape status |
+| `GET /health` | 200 `{ ok: true, service: "rose-bot", engine: "postgres", lastTick, articles, sources }` |
 | `GET /articles` | Recently stored articles (title, url, timestamps; no full body) |
+| `GET /sources` | Token-gated (`ROSE_SERVICE_TOKEN`). Ops fields belong in rose-web-admin. |
 
 ### Pace
 
@@ -90,7 +91,9 @@ English RSS only:
 
 User-Agent: `RoseBot/0.1 (+https://github.com/ejqs/newsey)`.
 
-SQLite locally: `$DATA_DIR/rose.sqlite` (`DATA_DIR`, else `/data` if that directory exists, else `./data`). Production: Railway **Postgres** via `DATABASE_URL`.
+Local and production use Railway **Postgres** via `DATABASE_URL`. The bot exits if it is missing.
+
+Source config after first seed: **rose-web-admin**. Public list: **rose-web-public**. Map: [`web.md`](./web.md).
 
 ## Hosting (Railway)
 
@@ -105,7 +108,7 @@ SQLite locally: `$DATA_DIR/rose.sqlite` (`DATA_DIR`, else `/data` if that direct
 | **Workspace** | ejqs (`f43c0117-46cb-439c-a5e3-0b21b8c8a0ef`) |
 | **`TYPESAFE_API_KEY`** | Variable **exists** on rose, value **empty**. Leave empty until Jev. Paste from [console.typesafe.ai/keys](https://console.typesafe.ai/keys). |
 | **`RAILPACK_NODE_VERSION`** | Set to `22` (matches `.node-version`). |
-| **`DATABASE_URL`** | `${{Postgres.DATABASE_URL}}` on rose (private). |
+| **`DATABASE_URL`** | `${{Postgres.DATABASE_URL}}` on rose (bot), rose-web-public, and rose-web-admin |
 | **Postgres** | [Postgres](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463/service/b3591f7b-2384-4576-ab2b-5ab81b37f99a?environmentId=4d6055df-ab41-4850-b0bd-06031800b11d) (`b3591f7b-2384-4576-ab2b-5ab81b37f99a`) |
 | **Public URL** | https://rose-production-ac15.up.railway.app |
 | **Latest deploy** | **SUCCESS** `714c88e4` (commit `6449d05`) |

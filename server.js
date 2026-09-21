@@ -49,10 +49,10 @@ const countN = (row) => Number(row?.n ?? 0);
 let db;
 
 async function seedSources() {
+  const n = countN(await db.get("SELECT COUNT(*) AS n FROM news_sources"));
+  if (n > 0) return;
   const t = nowIso();
   for (const s of SEEDS) {
-    const exists = await db.get("SELECT id FROM news_sources WHERE feed_url = ?", s.feed_url);
-    if (exists) continue;
     await db.run(
       `INSERT INTO news_sources (
         name, base_url, feed_url, scrape_method, status, priority,
@@ -420,9 +420,9 @@ async function handle(req, res) {
   if (url.pathname === "/health" || url.pathname === "/") {
     json(res, 200, {
       ok: true,
-      service: "rose",
-      product: "newsey",
-      engine: db.kind,
+      service: "rose-bot",
+      product: "rose",
+      engine: "postgres",
       lastTick,
       articles: countN(await db.get("SELECT COUNT(*) AS n FROM articles")),
       sources: countN(await db.get("SELECT COUNT(*) AS n FROM news_sources")),
@@ -430,6 +430,12 @@ async function handle(req, res) {
     return;
   }
   if (url.pathname === "/sources") {
+    const token = process.env.ROSE_SERVICE_TOKEN || "";
+    const given = (req.headers.authorization || "").replace(/^Bearer\s+/i, "") || req.headers["x-rose-token"] || "";
+    if (!token || given !== token) {
+      json(res, 401, { ok: false, error: "unauthorized" });
+      return;
+    }
     json(res, 200, { ok: true, sources: await db.all("SELECT * FROM news_sources ORDER BY priority DESC") });
     return;
   }
@@ -459,7 +465,7 @@ async function main() {
     });
   });
   server.listen(PORT, "0.0.0.0", async () => {
-    console.log(`rose listening on ${PORT} (${db.label})`);
+    console.log(`rose-bot listening on ${PORT} (${db.label})`);
     try {
       await runTick();
     } catch (err) {
