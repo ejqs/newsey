@@ -2,7 +2,13 @@
 
 **Rose** is a Recursive Opinionated Search Engine: paced, robots-respecting news ingest, then **Jev** (TypeSafe System One) turns articles into structured records.
 
-This repo currently holds the **official TypeSafe / Jev agent skill**, install notes, and a local mock fallback. The product app is not built yet.
+This repo is **Rose**: paced, robots-respecting RSS ingest into SQLite. **Jev is later.**
+
+```bash
+npm start   # PORT (default 43123). GET /health  GET /sources  GET /articles
+```
+
+Requires **Node 22+**. Tick every 15 minutes: one source, at most three new article URLs, six-hour gap per source. Every RSS URL is stored in `url_ledger` so it is never fetched twice. Seeds are English-language outlets only.
 
 ## Jev skill (installed)
 
@@ -22,13 +28,13 @@ Details: [docs/jev-skill.md](docs/jev-skill.md).
 
 Jev calls need **`TYPESAFE_API_KEY`** from [TypeSafe console keys](https://console.typesafe.ai/keys). Copy `.env.example` to `.env` and set it.
 
-Without a key, use [`fixtures/jev-mock/`](fixtures/jev-mock/) — do not call the hosted API.
+Without a key, use [`fixtures/jev-mock/`](fixtures/jev-mock/) — do not call the hosted API. The scrape service does not use this key.
 
 ## Docs
 
-Index: [docs/README.md](docs/README.md). Hosting: [docs/hosting.md](docs/hosting.md).
+Index: [docs/README.md](docs/README.md). Hosting: [docs/hosting.md](docs/hosting.md). Product: [docs/project-context.md](docs/project-context.md).
 
-Railway project (empty service **rose**, GitHub not connected yet): [dashboard](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463).
+GitHub: [ejqs/newsey](https://github.com/ejqs/newsey). Railway **rose**: [dashboard](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463).
 
 ## Refresh the skill
 

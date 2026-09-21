@@ -2,10 +2,10 @@
 
 **Product:** **Rose** — Recursive Opinionated Search Engine  
 **Owner:** Earlan  
-**Status:** Direction confirmed; docs only (no app build yet). **TypeSafe / Jev agent skill is installed in Origin.** GitHub + Railway: project exists; GitHub repo is Earlan’s to create/push.  
+**Status:** Mini scrape service is in this repo (`server.js`). **Jev later** — no Jev calls, no invented `TYPESAFE_API_KEY`. GitHub source of truth: [`ejqs/newsey`](https://github.com/ejqs/newsey). Railway **rose** deploys from `main`.  
 **Updated:** 2026-09-20  
-**Origin:** [ejqs/newsey](https://cursor.com/codebase/ejqs/newsey) (Jev skill on PR [#1](https://cursor.com/codebase/ejqs/newsey/pull/1), branch `cursor/install-jev-skill-7ef1`)  
-**GitHub:** not created yet — Earlan will push. Intended: `https://github.com/ejqs/newsey` (private; fallback names `rose` or `newsey-rose` if taken).
+**Canonical repo:** https://github.com/ejqs/newsey  
+**PR (skill/docs):** https://github.com/ejqs/newsey/pull/1 (merged as `777c609`)
 
 ## One-line definition
 
@@ -25,6 +25,7 @@ Rose scrapes news **over the long term** (paced, robots-respecting), uses **Jev*
 - Ad-hoc / invent-as-you-go category labels from a generative model
 - Scraping an entire source catalog in a single cron tick
 - Ignoring robots.txt or polite crawl delays
+- **Jev in this slice** — `jev_status` is stored as `skipped`; LLM source-discovery is later
 
 ## Constraints
 
@@ -35,6 +36,8 @@ Rose scrapes news **over the long term** (paced, robots-respecting), uses **Jev*
 | **Gather vs judge** | Scrapers/fetchers/NER gather; Jev structures; app upserts DB rows |
 | **Crawl pace** | Spread work over weeks/months; small batches per cron; “slow completeness” |
 | **robots.txt** | Always fetch and honor robots.txt before scraping a host/path |
+| **English only** | Seeded sources are English-language outlets; articles stored with `lang=en` |
+| **No double-scrape** | Every article URL is written to `url_ledger` before fetch; existing URLs are never fetched again |
 | **Recursion** | Deepen entities/claims only to enrich profiles, within daily budgets |
 | **Query path (later)** | LLM → structured queries → Rose DB; scrape cron stays the freshness engine |
 
@@ -43,32 +46,66 @@ Rose scrapes news **over the long term** (paced, robots-respecting), uses **Jev*
 | Decision | Choice |
 | --- | --- |
 | Product name | **Rose** (Recursive Opinionated Search Engine) |
-| Decision model | TypeSafe **Jev** |
+| Decision model | TypeSafe **Jev** (later) |
 | Opinionated | Fixed Jev taxonomy, not ad-hoc LLM labels |
-| Primary loop | Paced cron scrape → extract → Jev structure → upsert |
-| **v0 database** | Three core tables: **`news_sources`** (incl. scrape status), **`articles`**, **`jev_analyses`** |
+| Primary loop (now) | Paced RSS scrape → store article text → skip Jev |
+| **v0 database** | SQLite: **`news_sources`**, **`articles`**, **`url_ledger`**. `jev_analyses` is later. |
 | Crawl policy | Long-term completeness; **not** all-at-once |
 | robots.txt | **Always respected**; blocked paths never scraped |
 | Query model | Later: LLM plans queries over the structured DB |
-| Build now? | **No** — document first; coding is an open choice |
+| Build now? | **Yes** — mini scrape HTTP service |
 
-Schema, statuses, and cron batching: [`jev-ai-fanout.md`](./jev-ai-fanout.md).
+Schema, statuses, and cron batching: [`jev-ai-fanout.md`](./jev-ai-fanout.md). Runtime: [`hosting.md`](./hosting.md).
+
+## Mini scrape service
+
+`npm start` → `node server.js`. Binds `process.env.PORT` (default `43123`). Node **22+** (`node:sqlite`, zero npm dependencies).
+
+| Path | What |
+| --- | --- |
+| `GET /health` | 200 `{ ok: true, service, lastTick, articles, sources }` |
+| `GET /sources` | Seeded RSS sources and scrape status |
+| `GET /articles` | Recently stored articles (title, url, timestamps; no full body) |
+
+### Pace
+
+| Knob | Default |
+| --- | --- |
+| Tick | 15 minutes (`TICK_MS`) |
+| Sources per tick | 1 (`MAX_SOURCES_PER_TICK`) |
+| New article fetches per tick | 3 (`MAX_FETCHES_PER_TICK`) |
+| Gap after a source is worked | 6 hours (`SOURCE_GAP_HOURS`) |
+| robots.txt cache | 24 hours |
+| Delay between requests | max(2s, Crawl-delay) |
+
+### Seeds (`news_sources`)
+
+English RSS only:
+
+1. BBC World — `https://feeds.bbci.co.uk/news/world/rss.xml`
+2. NPR News — `https://feeds.npr.org/1001/rss.xml`
+3. The Guardian World — `https://www.theguardian.com/world/rss`
+4. Al Jazeera English — `https://www.aljazeera.com/xml/rss/all.xml`
+
+User-Agent: `RoseBot/0.1 (+https://github.com/ejqs/newsey)`.
+
+SQLite file: `$DATA_DIR/rose.sqlite` (`DATA_DIR`, else `/data` if that directory exists, else `./data`).
 
 ## Hosting (Railway)
 
-Created under Earlan’s **ejqs** workspace. Empty service — **no GitHub source connected** (repo does not exist yet). No public domain (nothing to serve).
+**Source of truth:** GitHub [`ejqs/newsey`](https://github.com/ejqs/newsey). Service **rose** is connected to **`ejqs/newsey@main`**.
 
 | | |
 | --- | --- |
+| **GitHub (canonical)** | https://github.com/ejqs/newsey |
 | **Project** | [newsey](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463) (`a257119d-74b0-462c-a6a7-38a7f1a28463`) |
 | **Service** | [rose](https://railway.com/project/a257119d-74b0-462c-a6a7-38a7f1a28463/service/7b0a3f74-dcfe-4be8-85d7-39485f914de8?environmentId=4d6055df-ab41-4850-b0bd-06031800b11d) (`7b0a3f74-dcfe-4be8-85d7-39485f914de8`) |
 | **Environment** | production (`4d6055df-ab41-4850-b0bd-06031800b11d`) |
 | **Workspace** | ejqs (`f43c0117-46cb-439c-a5e3-0b21b8c8a0ef`) |
-| **`TYPESAFE_API_KEY`** | Variable **exists** on rose, value **empty**. Paste the real key from [console.typesafe.ai/keys](https://console.typesafe.ai/keys). Do not invent one. |
+| **`TYPESAFE_API_KEY`** | Variable **exists** on rose, value **empty**. Leave empty until Jev. Paste from [console.typesafe.ai/keys](https://console.typesafe.ai/keys). |
+| **`RAILPACK_NODE_VERSION`** | Set to `22` (matches `.node-version`). |
 
-**After GitHub exists:** in the rose service, connect source `ejqs/newsey` (branch `main` once Earlan pushes). Railway GitHub App must have access to that repo.
-
-**First deploy:** this tree is skill + docs, not a web app. Wait until Rose has an HTTP service that binds `PORT`, **or** add a tiny health server before connecting source (connecting GitHub starts a build that will fail today).
+Railway SUCCESS is claimed only when scrape code is on `main` and a deploy is actually SUCCESS.
 
 ## Jev agent skill (installed)
 
@@ -83,10 +120,9 @@ Official TypeSafe skill pack **`typesafe-ai`** from [typesafe-ai/skills](https:/
 
 ## Open choices
 
-1. **Which DB engine** for v0 (SQLite vs Postgres vs other)?
-2. **Which news sources** to seed `news_sources` first?
-3. **Taxonomy** — ship starter enums as-is, or edit before code?
-4. **Start coding next?** when Earlan greenlights.
+1. **Taxonomy** — ship starter enums as-is, or edit before Jev is wired?
+2. **Persistent volume** on Railway `/data` so SQLite survives redeploys.
+3. **LLM source-discovery** — later; seeds stay hand-picked until then.
 
 ## Doc map
 
