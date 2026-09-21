@@ -1,0 +1,13 @@
+{
+  "name": "newsey",
+  "private": true,
+  "type": "module",
+  "description": "Rose — paced, robots-respecting news ingest (Jev later)",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "scrape-once": "node server.js --once"
+  }
+}
