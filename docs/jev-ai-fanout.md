@@ -2,7 +2,7 @@
 
 **Product:** [Rose](./project-context.md) — Recursive Opinionated Search Engine  
 **Audience:** Earlan  
-**Status:** Plan only (no app yet)  
+**Status:** Mini scrape is live on Railway **rose**. Production DB is **Postgres**. **Jev later**.  
 **Updated:** 2026-09-20
 
 ## Product loop
@@ -20,7 +20,7 @@ Jev does not fetch or write articles. Scrapers gather; Jev condenses; the DB is 
 
 ## v0 database schema
 
-Three tables Earlan locked. Engine TBD (SQLite fine for slice 1; Postgres when multi-worker).
+Three tables Earlan locked. **Postgres** on Railway rose; SQLite for local `npm start`.
 
 ### 1. `news_sources`
 

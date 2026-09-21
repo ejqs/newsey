@@ -9,5 +9,8 @@
   "scripts": {
     "start": "node server.js",
     "scrape-once": "node server.js --once"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
   }
 }
